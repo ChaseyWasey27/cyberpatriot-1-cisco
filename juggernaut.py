@@ -21,7 +21,7 @@ except ImportError:
     spwd = None
 
 # =============================================================================
-# Juggernaut v4 - CyberPatriot Linux Automation (Ubuntu 22.04 / Mint 21)
+# Juggernaut v4 (Restored & Fixed) - CyberPatriot Linux Automation
 # =============================================================================
 
 # --- Configuration ---
@@ -101,8 +101,10 @@ SERVICE_PORTS = {
 }
 
 # V4: Essential services whitelist (Do not disable automatically)
+# FIX APPLIED: Added unattended-upgrades (Points) and GUI deps (Black Screen Fix)
 ESSENTIAL_SERVICES = [
     "dbus",
+    "gdm",  # Added gdm
     "gdm3",
     "lightdm",
     "systemd-",
@@ -126,8 +128,20 @@ ESSENTIAL_SERVICES = [
     "whoopsie",
     "kerneloops",
     "cups",
-    "cups-browsed",  # Keep CUPS by default unless scenario prohibits printing
+    "cups-browsed",
     "ccsclient",  # CyberPatriot specific
+    # --- FIX START ---
+    "unattended-upgrades",  # Keeps points for auto updates
+    "aptd",
+    "update-notifier",
+    "upower",  # GUI Power management
+    "colord",  # GUI Color profiles
+    "packagekit",  # GUI Package management
+    "rtkit-daemon",  # Realtime kit (Audio/GUI)
+    "avahi-daemon",
+    "bluetooth",
+    "wpa_supplicant",
+    # --- FIX END ---
 ]
 
 # V4: Known good SUID/SGID binaries (whitelist)
@@ -958,16 +972,8 @@ APT::Periodic::AutocleanInterval "7";
     run_command(f"echo '{apt_periodic_config}' > /etc/apt/apt.conf.d/20auto-upgrades")
 
     # Advanced System Hardening (fstab)
-    print_status("Securing shared memory (/dev/shm) in fstab...")
-    if run_command("grep '/run/shm' /etc/fstab | grep 'noexec'", silent=True) is None:
-        try:
-            shutil.copy("/etc/fstab", "/etc/fstab.bak")
-        except IOError:
-            pass
-        run_command(
-            "echo 'tmpfs /run/shm tmpfs defaults,noexec,nosuid,nodev 0 0' >> /etc/fstab"
-        )
-        run_command("mount -o remount /run/shm", silent=True)
+    # FIX: REMOVED /run/shm noexec hardening to prevent GNOME/Wayland crash
+    print_status("Skipping /run/shm hardening to protect GUI stability...")
 
 
 # --- Phase 5: Software, Services, and Advanced Hardening (V4 Logic) ---
@@ -1091,7 +1097,9 @@ def software_services_and_hardening():
         return
 
     # 1. Install Tools
-    run_command("apt-get install ufw auditd debsums net-tools apparmor-utils -yq")
+    run_command(
+        "apt-get install ufw auditd debsums net-tools apparmor-utils unattended-upgrades -yq"
+    )
     run_command("systemctl enable --now auditd")
     run_command("auditctl -e 1")
 
