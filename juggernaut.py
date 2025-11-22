@@ -4,12 +4,12 @@ import logging
 import os
 import pwd
 import re
-import shutil
+import signal
 import subprocess
 import sys
 import time
 
-# V4: Required for secure password auditing
+# V5: Required for secure password auditing
 try:
     import crypt
     import spwd
@@ -21,13 +21,13 @@ except ImportError:
     spwd = None
 
 # =============================================================================
-# Juggernaut v4 (Restored & Fixed) - CyberPatriot Linux Automation
+# Juggernaut v5 (Ultimate) - CyberPatriot Linux Automation
 # =============================================================================
 
 # --- Configuration ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 INPUT_DIR = os.path.join(BASE_DIR, "Input")
-LOG_FILE = os.path.join(BASE_DIR, "juggernaut_v4.log")
+LOG_FILE = os.path.join(BASE_DIR, "juggernaut_v5.log")
 
 # Input Files
 USERS_FILE = os.path.join(INPUT_DIR, "users.txt")
@@ -54,27 +54,115 @@ PROHIBITED_SOFTWARE = []
 # Constants
 DEFAULT_PROHIBITED = [
     "hydra",
+    "hydra-gtk",
     "john",
-    "nmap",
-    "netcat",
-    "nc",
-    "wireshark",
-    "aircrack-ng",
-    "ophcrack",
+    "john-data",
+    "medusa",
     "nikto",
     "sqlmap",
+    "aircrack-ng",
+    "ophcrack",
+    "ophcrack-cli",
+    "hashcat",
+    "metasploit-framework",
     "kismet",
-    "medusa",
-    "dsniff",
+    "p0f",
+    "yersinia",
+    "hping3",
+    "crunch",
+    "cewl",
+    "fcrackzip",
+    "pdfcrack",
+    "exploitdb",
+    "wapiti",
+    "beef-xss",
+    "responder",
+    "impacket-scripts",
+    "wpscan",
+    "nmap",
+    "zenmap",
+    "wireshark",
+    "wireshark-common",
+    "tshark",
+    "tcpdump",
     "ettercap",
+    "ettercap-common",
+    "ettercap-graphical",
+    "dsniff",
+    "netdiscover",
+    "arp-scan",
+    "netcat",
+    "nc",
+    "netcat-traditional",
+    "netcat-openbsd",
+    "cryptcat",
+    "socat",
+    "rkhunter",
+    "chkrootkit",
+    "telnet",
+    "telnetd",
+    "inetutils-telnetd",
+    "rsh-server",
+    "rsh-client",
+    "inetd",
+    "openbsd-inetd",
+    "xinetd",
+    "tftp",
+    "tftpd",
+    "tftpd-hpa",
+    "finger",
+    "talk",
+    "talkd",
+    "nis",
+    "ypbind",
+    "vino",
+    "tightvncserver",
+    "vnc4server",
+    "x11vnc",
+    "xrdp",
+    "remmina",
+    "rdesktop",
+    "vinagre",
     "aisleriot",
     "gnome-mines",
+    "gnome-sudoku",
     "freeciv",
-    "telnetd",
-    "rsh-server",
+    "openarena",
+    "minetest",
+    "doomsday",
+    "gnome-mahjongg",
+    "kpat",
+    "kmines",
+    "gnome-chess",
+    "wesnoth",
+    "supertuxkart",
+    "supertux",
+    "steam",
+    "lutris",
+    "iagno",
+    "swell-foop",
+    "quadrapassel",
+    "chromium-bsu",
+    "0ad",
+    "games-arcade",
+    "games-board",
+    "games-card",
+    "irssi",
+    "hexchat",
+    "weechat",
+    "transmission",
+    "transmission-gtk",
+    "transmission-daemon",
+    "deluge",
+    "qbittorrent",
+    "vuze",
+    "frostwire",
+    "amule",
+    "vlc",
+    "pidgin",
 ]
 
-# V4: Service Mapping (Input Name -> Package Name, Service Unit Name)
+# V5: Service Mapping (Input Name -> Package Name, Service Unit Name)
 SERVICE_MAP = {
     "ssh": ("openssh-server", "ssh"),
     "sshd": ("openssh-server", "ssh"),
@@ -100,11 +188,11 @@ SERVICE_PORTS = {
     "smbd": [139, 445],
 }
 
-# V4: Essential services whitelist (Do not disable automatically)
-# FIX APPLIED: Added unattended-upgrades (Points) and GUI deps (Black Screen Fix)
+# V5: Essential services whitelist (Do not disable automatically)
+# FIX APPLIED: Added critical VM tools, Firewall, and Update services
 ESSENTIAL_SERVICES = [
     "dbus",
-    "gdm",  # Added gdm
+    "gdm",
     "gdm3",
     "lightdm",
     "systemd-",
@@ -141,10 +229,15 @@ ESSENTIAL_SERVICES = [
     "avahi-daemon",
     "bluetooth",
     "wpa_supplicant",
+    "ufw",  # Firewall (Critical)
+    "x2goserver",  # Required Install
+    "x2gocleansessions",  # Required Install
+    "open-vm-tools",  # VM Stability
+    "vgauth",  # VM Stability
     # --- FIX END ---
 ]
 
-# V4: Known good SUID/SGID binaries (whitelist)
+# V5: Known good SUID/SGID binaries (whitelist)
 KNOWN_GOOD_SUID = [
     "/usr/bin/sudo",
     "/usr/bin/passwd",
@@ -163,6 +256,9 @@ KNOWN_GOOD_SUID = [
     "/usr/bin/chage",
     "/usr/bin/write",
     "/usr/sbin/unix_chkpwd",
+    "/usr/bin/sudoedit",
+    "/usr/lib/snapd/snap-confine",
+    "/usr/libexec/polkit-agent-helper-1",
 ]
 
 # --- Helper Functions ---
@@ -184,7 +280,7 @@ def run_command(command, input_data=None, silent=False, suppress_stderr=False):
     """Executes a shell command and logs it."""
     logging.info(f"EXECUTING: {command}")
 
-    # V4: Use apt-get consistently for scripting robustness
+    # V5: Use apt-get consistently for scripting robustness
     command = (
         command.replace("apt install", "apt-get install")
         .replace("apt update", "apt-get update")
@@ -225,7 +321,7 @@ def run_command(command, input_data=None, silent=False, suppress_stderr=False):
 
         logging.error(error_message)
 
-        # V4: Handle common non-fatal errors gracefully (grep/find/debsums return 1 if nothing found)
+        # V5: Handle common non-fatal errors gracefully
         if e.returncode == 1 and (
             "grep" in command or "find" in command or "debsums -c" in command
         ):
@@ -313,7 +409,6 @@ def load_input_files():
         with open(PASSWORD_FILE, "r") as f:
             NEW_PASSWORD = f.read().strip()
 
-        # Helper to load lists, converting to lowercase for normalization (except passwords/users)
         def load_list(filename, lower=True):
             with open(filename, "r") as f:
                 if lower:
@@ -323,14 +418,12 @@ def load_input_files():
                         if line.strip() and not line.startswith("#")
                     ]
                 else:
-                    # Keep original case for usernames/passwords
                     return [
                         line.strip()
                         for line in f
                         if line.strip() and not line.startswith("#")
                     ]
 
-        # V4: Load raw inputs
         AUTHORIZED_USERS = load_list(USERS_FILE, lower=False)
         REQUIRED_INSTALLS = load_list(INSTALLS_FILE)
         PROHIBITED_SOFTWARE = load_list(PROHIBITED_FILE)
@@ -339,7 +432,6 @@ def load_input_files():
         if not PROHIBITED_SOFTWARE:
             PROHIBITED_SOFTWARE = DEFAULT_PROHIBITED
 
-        # V4: Paired Admin/Password Audit Loading
         admin_lines = load_list(ADMINS_FILE, lower=False)
         audit_lines = load_list(
             ADMIN_AUDIT_FILE, lower=False
@@ -347,18 +439,15 @@ def load_input_files():
 
         AUTHORIZED_ADMINS_LIST = admin_lines
 
-        # Pair line X of admins.txt with line X of admin_passwords_audit.txt
         for i, admin in enumerate(admin_lines):
             if i < len(audit_lines) and audit_lines[i]:
                 ADMIN_WEAK_PASSWORDS[admin] = audit_lines[i]
                 logging.info(f"Loaded expected weak password for audit: {admin}")
 
-        # Ensure admins are authorized users
         for admin in AUTHORIZED_ADMINS_LIST:
             if admin not in AUTHORIZED_USERS:
                 AUTHORIZED_USERS.append(admin)
 
-        # Groups
         with open(GROUPS_FILE, "r") as f:
             for line in f:
                 if ":" in line and line.strip() and not line.startswith("#"):
@@ -377,13 +466,31 @@ def load_input_files():
 # --- Phase 1: Initialization, Updates & Stabilization ---
 
 
+def ensure_automatic_updates():
+    """V5: Force enable unattended-upgrades for points."""
+    print_status("Ensuring Automatic Updates are ENABLED (For Scoring)...")
+    run_command("apt-get install unattended-upgrades apt-listchanges -yq", silent=True)
+
+    # Create the configuration file explicitly
+    config_content = """
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
+APT::Periodic::AutocleanInterval "7";
+"""
+    run_command(f"echo '{config_content}' > /etc/apt/apt.conf.d/20auto-upgrades")
+
+    # Start the service
+    run_command("systemctl unmask unattended-upgrades", silent=True)
+    run_command("systemctl enable --now unattended-upgrades", silent=True)
+    run_command("systemctl start unattended-upgrades", silent=True)
+
+
 def initialization_and_updates():
     """Checks for root, detects OS, stabilizes system, identifies operator, and updates."""
     print_header("Phase 1: Initialization, Updates & Stabilization")
     global CURRENT_OPERATOR, OS_DISTRO
     CURRENT_OPERATOR = get_current_operator()
 
-    # Check for root
     if os.geteuid() != 0:
         setup_directories()
         print_status("This script must be run as root. Use sudo.", False)
@@ -393,7 +500,6 @@ def initialization_and_updates():
     load_input_files()
     print_status(f"Operator Protection Active for: {CURRENT_OPERATOR}")
 
-    # 1. Detect OS Version
     try:
         OS_VERSION = run_command("lsb_release -rs")
         OS_DISTRO = run_command("lsb_release -is").lower()
@@ -402,7 +508,7 @@ def initialization_and_updates():
         print_status("Could not detect OS version.", False)
         sys.exit(1)
 
-    # 2. Remove Immutable Bits (V4 Fix)
+    # Remove Immutable Bits
     print_status("Removing immutable bits (chattr -i), skipping symlinks...")
     run_command(
         "find /etc /home /opt /root /var /usr /srv /bin /sbin -not -type l -exec chattr -ia {} +",
@@ -410,7 +516,6 @@ def initialization_and_updates():
         suppress_stderr=True,
     )
 
-    # 3. Fix Repositories and Run Full Update/Upgrade
     if not confirm_action("Run full system update and upgrade? (Can take 10-30+ mins)"):
         return
 
@@ -450,6 +555,8 @@ deb http://security.ubuntu.com/ubuntu/ {codename}-security main restricted unive
             print_status("System upgrade complete.")
             run_command("apt-get autoremove -yq")
 
+        ensure_automatic_updates()  # V5 Fix
+
     except Exception as e:
         print_status(f"Failed during update/upgrade phase: {e}", False)
 
@@ -458,8 +565,7 @@ deb http://security.ubuntu.com/ubuntu/ {codename}-security main restricted unive
 
 
 def interactive_media_hunt(stdscr):
-    """Uses curses TUI for selecting files to delete. (Refined Search Filtering)"""
-    # Curses Setup
+    """Uses curses TUI for selecting files to delete. (Restored V4 Logic)"""
     curses.curs_set(0)
     if curses.has_colors():
         curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK)
@@ -490,7 +596,6 @@ def interactive_media_hunt(stdscr):
         "*.gif",
     ]
 
-    # Improved Filtering: Exclude noisy directories
     search_command = (
         f"find /home /var/www /srv /tmp /opt -type f "
         f"\( -iname {' -o -iname '.join(extensions)} \) "
@@ -592,18 +697,15 @@ def run_media_hunt():
         print_status(f"Curses interface failed: {e}.", False)
 
 
-# --- Phase 3: User Management Blitz (V4 Intelligent Passwords) ---
+# --- Phase 3: User Management Blitz ---
 
 
 def audit_and_change_password(username):
-    """V4: Audits password against README expectations and changes if insecure."""
-
-    # 1. Operator Protection
+    """V5: Audits password and changes if insecure."""
     if username == CURRENT_OPERATOR:
         print_status(f"Skipping password change for current operator: {username}", None)
         return
 
-    # 2. Check if user has an expected weak password from the input file
     expected_weak_password = ADMIN_WEAK_PASSWORDS.get(username)
 
     if expected_weak_password and crypt and spwd:
@@ -630,7 +732,6 @@ def audit_and_change_password(username):
                 )
                 change_password(username, NEW_PASSWORD)
             else:
-                # If it doesn't match the weak one, standardize it anyway.
                 print_status(
                     f"Password for {username} does not match weak audit expectation. Standardizing.",
                     True,
@@ -638,24 +739,18 @@ def audit_and_change_password(username):
                 change_password(username, NEW_PASSWORD)
 
         except Exception as e:
-            # Fallback if auditing fails
             print_status(
                 f"Error auditing password for {username}: {e}. Applying standard password.",
                 None,
             )
             change_password(username, NEW_PASSWORD)
-
-    # 3. Standard User (No specific expectation)
     else:
-        # Apply standardized strong password
         change_password(username, NEW_PASSWORD)
 
 
 def change_password(username, password):
-    """Helper to execute the actual password change."""
     chpasswd_input = f"{username}:{password}\n"
     if run_command("chpasswd", input_data=chpasswd_input, silent=True) is not None:
-        # Force password change on next login (Skip operator)
         if username != CURRENT_OPERATOR and username != "root":
             run_command(f"chage -d 0 {username}", silent=True)
     else:
@@ -663,7 +758,6 @@ def change_password(username, password):
 
 
 def user_management_blitz():
-    """Handles user creation, deletion, admin rights, groups, and passwords."""
     print_header("Phase 3: User Management Blitz")
 
     if not confirm_action(
@@ -671,13 +765,12 @@ def user_management_blitz():
     ):
         return
 
-    # 1. Get Current System State
     current_users = {}
     for user in pwd.getpwall():
         if user.pw_uid >= 1000 or user.pw_uid == 0:
             current_users[user.pw_name] = {"uid": user.pw_uid}
 
-    # 2. Unauthorized User Purge
+    # Unauthorized User Purge
     for username in current_users:
         if (
             username != "root"
@@ -687,22 +780,21 @@ def user_management_blitz():
             print_status(f"Deleting unauthorized user: {username}...", False)
             run_command(f"userdel -r {username}", silent=True)
 
-    # 3. Ensure Authorized Users Exist
+    # Ensure Authorized Users Exist
     for username in AUTHORIZED_USERS:
         if username not in current_users:
             run_command(f"useradd -m -s /bin/bash {username}", silent=True)
 
-    # 4. Administrator Audit
+    # Administrator Audit
     admin_groups = ["sudo", "adm"]
     for group_name in admin_groups:
         try:
             members = grp.getgrnam(group_name).gr_mem
             for member in members:
                 if member not in AUTHORIZED_ADMINS_LIST:
-                    # V4: Operator Protection during demotion
                     if member == CURRENT_OPERATOR:
                         print_status(
-                            f"WARNING: Operator {member} not listed as admin, skipping removal to prevent lockout.",
+                            f"WARNING: Operator {member} not listed as admin, skipping removal.",
                             None,
                         )
                         continue
@@ -714,7 +806,7 @@ def user_management_blitz():
         for group_name in admin_groups:
             run_command(f"usermod -a -G {group_name} {admin}", silent=True)
 
-    # 5. Group Management
+    # Group Management
     for group, users in REQUIRED_GROUPS.items():
         try:
             grp.getgrnam(group)
@@ -724,7 +816,7 @@ def user_management_blitz():
             if user in AUTHORIZED_USERS:
                 run_command(f"usermod -a -G {group} {user}", silent=True)
 
-    # 6. Password Standardization and Auditing (V4 Implementation)
+    # Password Standardization
     print_status("Auditing and standardizing passwords...")
     for username in AUTHORIZED_USERS:
         try:
@@ -735,129 +827,76 @@ def user_management_blitz():
 
     change_password("root", NEW_PASSWORD)
 
-    # 7. Advanced Checks (UID 0, Shells, Lock Root)
+    # Advanced Checks
     print_status("Auditing UID 0 users and shells...")
     uid_counter = 1500
     for user in pwd.getpwall():
-        # UID 0 Check
         if user.pw_uid == 0 and user.pw_name != "root":
             print_status(f"Found UID 0 user: {user.pw_name}. Changing UID.", False)
             run_command(f"usermod -u {uid_counter} {user.pw_name}", silent=True)
             uid_counter += 1
 
-        # Shell Audit
-        if user.pw_uid < 1000 and user.pw_uid != 0:  # System users
+        if user.pw_uid < 1000 and user.pw_uid != 0:
             if user.pw_shell not in [
                 "/bin/false",
                 "/usr/sbin/nologin",
                 "/sbin/nologin",
             ]:
                 run_command(f"usermod -s /usr/sbin/nologin {user.pw_name}", silent=True)
-        elif user.pw_uid >= 1000 and user.pw_name != "nobody":  # Human users
+        elif user.pw_uid >= 1000 and user.pw_name != "nobody":
             if user.pw_shell != "/bin/bash":
                 run_command(f"usermod -s /bin/bash {user.pw_name}", silent=True)
 
     run_command("passwd -l root", silent=True)
 
 
-# --- Phase 4: Advanced Configuration Hardening ---
+# --- Phase 4: Advanced Configuration Hardening (V5 Safe Mode) ---
 
 
-def configure_pam_common_auth():
-    """Dynamically configures /etc/pam.d/common-auth (pam_faillock)."""
-    print_status("Configuring PAM common-auth (pam_faillock)...")
+def safe_pam_configure():
+    """V5: Edit existing PAM files instead of overwriting (Protects Sudo)"""
+    print_status("Applying PAM Hardening (Safe Mode via SED)...")
+    run_command("apt-get install libpam-pwquality libpam-modules -yq", silent=True)
 
-    # Ensure libpam-modules is installed (contains faillock on 22.04).
-    run_command("apt-get install libpam-modules -yq")
+    # 1. Common Password (PWQuality + History)
+    cp = "/etc/pam.d/common-password"
+    # Ensure pwquality line exists and has scoring params
+    if "pam_pwquality.so" in run_command(f"cat {cp}"):
+        run_command(
+            f"sed -i '/pam_pwquality.so/s/$/ minlen=14 retry=3/' {cp}", silent=True
+        )
+    else:
+        run_command(
+            f"sed -i '/pam_unix.so/i password requisite pam_pwquality.so minlen=14 retry=3' {cp}",
+            silent=True,
+        )
 
-    AUTH_FILE = "/etc/pam.d/common-auth"
-    try:
-        shutil.copyfile(AUTH_FILE, f"{AUTH_FILE}.bak_juggernaut")
-    except IOError:
-        return
+    # Ensure history
+    if "pam_pwhistory.so" not in run_command(f"cat {cp}"):
+        run_command(
+            f"sed -i '/pam_unix.so/i password required pam_pwhistory.so use_authtok remember=5' {cp}",
+            silent=True,
+        )
 
-    faillock_settings = "deny=5 unlock_time=900 even_deny_root"
-    preauth_line = f"auth required pam_faillock.so preauth silent {faillock_settings}"
-    authfail_line = f"auth [default=die] pam_faillock.so authfail {faillock_settings}"
-    authsucc_line = f"auth sufficient pam_faillock.so authsucc {faillock_settings}"
-
-    try:
-        with open(AUTH_FILE, "r") as f:
-            lines = f.readlines()
-        cleaned_lines = []
-        for line in lines:
-            if "pam_faillock.so" in line or "pam_tally2.so" in line:
-                continue
-            if "pam_unix.so" in line and "nullok" in line:
-                line = line.replace("nullok_secure", "").replace("nullok", "")
-            cleaned_lines.append(line)
-
-        new_lines = []
-        unix_found = False
-        new_lines.append("\n# Juggernaut Script: pam_faillock (Top)\n")
-        new_lines.append(f"{preauth_line}\n")
-        for line in cleaned_lines:
-            new_lines.append(line)
-            if (
-                "pam_unix.so" in line
-                and line.strip().startswith("auth")
-                and not unix_found
-            ):
-                unix_found = True
-                new_lines.append(f"{authfail_line}\n")
-                new_lines.append(f"{authsucc_line}\n")
-
-        with open(AUTH_FILE, "w") as f:
-            f.writelines(new_lines)
-    except Exception as e:
-        print_status(f"CRITICAL: Failed to configure common-auth. Error: {e}", False)
-
-
-def configure_pam_common_password():
-    """Dynamically configures /etc/pam.d/common-password."""
-    print_status("Configuring PAM common-password (pwquality/history)...")
-    run_command("apt-get install libpam-pwquality -yq")
-    PASSWORD_FILE = "/etc/pam.d/common-password"
-    try:
-        shutil.copyfile(PASSWORD_FILE, f"{PASSWORD_FILE}.bak_juggernaut")
-    except IOError:
-        return
-
-    pwquality_settings = "retry=3 minlen=15 difok=8 ucredit=-1 lcredit=-1 dcredit=-1 ocredit=-1 reject_username maxrepeat=2 gecoscheck enforce_for_root"
-    history_setting = "remember=5"
-
-    try:
-        with open(PASSWORD_FILE, "r") as f:
-            lines = f.readlines()
-        new_lines = []
-        for line in lines:
-            if "pam_pwquality.so" in line and line.strip().startswith("password"):
-                new_line = re.sub(
-                    r"(password\s+requisite\s+pam_pwquality\.so).*",
-                    rf"\1 {pwquality_settings}",
-                    line,
-                )
-                new_lines.append(new_line)
-                continue
-            elif "pam_unix.so" in line and line.strip().startswith("password"):
-                line = (
-                    line.replace("nullok_secure", "")
-                    .replace("nullok", "")
-                    .replace("obscure", "")
-                )
-                if "sha512" not in line:
-                    line = line.strip() + " sha512"
-                line = re.sub(r"remember=\d+", "", line)
-                if history_setting not in line:
-                    line = line.strip() + f" {history_setting}"
-                new_lines.append(line.strip() + "\n")
-                continue
-            new_lines.append(line)
-        with open(PASSWORD_FILE, "w") as f:
-            f.writelines(new_lines)
-    except Exception as e:
-        print_status(
-            f"CRITICAL: Failed to configure common-password. Error: {e}", False
+    # 2. Common Auth (Faillock - Ubuntu 22.04 standard)
+    ca = "/etc/pam.d/common-auth"
+    # Only add faillock if not present to avoid lockout loops
+    if "pam_faillock.so" not in run_command(f"cat {ca}"):
+        print_status("Enabling faillock via sed injection (Safe Mode)...")
+        # Preauth (start of file)
+        run_command(
+            f"sed -i '1i auth required pam_faillock.so preauth silent deny=5 unlock_time=900' {ca}",
+            silent=True,
+        )
+        # Authfail (after pam_unix)
+        run_command(
+            f"sed -i '/pam_unix.so/a auth [default=die] pam_faillock.so authfail deny=5 unlock_time=900' {ca}",
+            silent=True,
+        )
+        # Authsucc (after pam_unix)
+        run_command(
+            f"sed -i '/pam_unix.so/a auth sufficient pam_faillock.so authsucc deny=5 unlock_time=900' {ca}",
+            silent=True,
         )
 
 
@@ -905,9 +944,8 @@ def configuration_hardening():
         run_command("sed -i '/^ENCRYPT_METHOD/d' /etc/login.defs", silent=True)
         run_command("echo 'ENCRYPT_METHOD SHA512' >> /etc/login.defs")
 
-    # Advanced PAM Configuration
-    configure_pam_common_auth()
-    configure_pam_common_password()
+    # Advanced PAM Configuration (V5 Safe Mode)
+    safe_pam_configure()
 
     # Kernel Hardening
     print_status("Applying Kernel Hardening (/etc/sysctl.conf)...")
@@ -926,7 +964,7 @@ def configuration_hardening():
 
     run_command("sysctl -p")
 
-    # GUI Hardening (V4 Fixes)
+    # GUI Hardening
     print_status("Applying GUI Hardening (GDM/LightDM/APT)...")
 
     # LightDM
@@ -936,7 +974,7 @@ def configuration_hardening():
             "echo '[Seat:*]\nallow-guest=false\ngreeter-show-manual-login=true\ngreeter-hide-users=true' > /etc/lightdm/lightdm.conf.d/50-secure-greeter.conf"
         )
 
-    # GDM (Robust multi-line insertion)
+    # GDM
     if os.path.exists("/etc/gdm3/custom.conf"):
         if (
             run_command("grep -q '\[daemon\]' /etc/gdm3/custom.conf", silent=True)
@@ -944,48 +982,39 @@ def configuration_hardening():
         ):
             run_command("echo '\n[daemon]' >> /etc/gdm3/custom.conf")
 
-        # V4 Fix: Use safe insertion method for sed multi-line append (Fixes the 'A' error)
         tmp_file = "/tmp/gdm_settings.txt"
-        # Remove existing settings first to avoid duplicates
         run_command(
             "sed -i '/AutomaticLoginEnable/d' /etc/gdm3/custom.conf", silent=True
         )
         run_command("sed -i '/AllowGuest/d' /etc/gdm3/custom.conf", silent=True)
         run_command("sed -i '/TimedLoginEnable/d' /etc/gdm3/custom.conf", silent=True)
-
         run_command(
             "echo 'AutomaticLoginEnable=false\nAllowGuest=false\nTimedLoginEnable=false' > "
             + tmp_file
         )
-        # Use the 'r' command in sed to read from the temp file and insert after [daemon]
         run_command(
             f"sed -i '/^\[daemon\]/r {tmp_file}' /etc/gdm3/custom.conf", silent=True
         )
         run_command(f"rm {tmp_file}", silent=True)
 
-    # Configure APT periodic updates
-    apt_periodic_config = """
-APT::Periodic::Update-Package-Lists "1";
-APT::Periodic::Unattended-Upgrade "1";
-APT::Periodic::AutocleanInterval "7";
-"""
-    run_command(f"echo '{apt_periodic_config}' > /etc/apt/apt.conf.d/20auto-upgrades")
-
-    # Advanced System Hardening (fstab)
     # FIX: REMOVED /run/shm noexec hardening to prevent GNOME/Wayland crash
     print_status("Skipping /run/shm hardening to protect GUI stability...")
 
 
-# --- Phase 5: Software, Services, and Advanced Hardening (V4 Logic) ---
-
-# Service Hardening Helpers (harden_ssh, harden_vsftpd, etc.)
-# (Implementations are robust from V3, included here for completeness)
+# --- Phase 5: Software, Services, and Advanced Hardening (V5 Logic) ---
 
 
 def harden_ssh(services_to_enable):
     if "ssh" in services_to_enable and os.path.exists("/etc/ssh/sshd_config"):
         print_status("Applying Advanced SSH Hardening...")
         ssh_config = "/etc/ssh/sshd_config"
+
+        # V5: Recursive Cleaning
+        if os.path.exists("/etc/ssh/sshd_config.d"):
+            print_status(
+                "Cleaning /etc/ssh/sshd_config.d/ to prevent override issues..."
+            )
+            run_command("rm -f /etc/ssh/sshd_config.d/*", silent=True)
 
         def update_ssh_config(key, value):
             if (
@@ -1006,44 +1035,19 @@ def harden_ssh(services_to_enable):
         run_command("systemctl restart ssh", silent=True)
 
 
-def harden_vsftpd(services_to_enable):
-    if "vsftpd" in services_to_enable and os.path.exists("/etc/vsftpd.conf"):
-        print_status("Applying Advanced VSFTPD Hardening (SSL/TLS, Chroot)...")
-
-        def update_vsftpd_conf(key, value):
-            run_command(f"sed -i '/^{key}=/d' /etc/vsftpd.conf", silent=True)
-            run_command(f"echo '{key}={value}' >> /etc/vsftpd.conf")
-
-        update_vsftpd_conf("anonymous_enable", "NO")
-        update_vsftpd_conf("local_enable", "YES")
-        update_vsftpd_conf("chroot_local_user", "YES")
-        update_vsftpd_conf("allow_writeable_chroot", "YES")
-        update_vsftpd_conf("ssl_enable", "YES")
-        update_vsftpd_conf("force_local_data_ssl", "YES")
-        update_vsftpd_conf("force_local_logins_ssl", "YES")
-
-        run_command("systemctl restart vsftpd", silent=True)
-
-
-# ... (harden_apache_php and harden_samba omitted for brevity, identical to V3) ...
-
-
 def manage_services(services_to_enable_units):
-    """V4: Enables required services and disables unauthorized services (Whitelist Strategy)."""
+    """V5: Enables required services and disables unauthorized services (Whitelist Strategy)."""
     print_status(
         "Starting Service Management (Enable Required / Disable Unauthorized)..."
     )
 
-    # 1. Enable Required Services
     if services_to_enable_units:
         print_status("Enabling required services...")
         for unit in services_to_enable_units:
             run_command(f"systemctl unmask {unit}", silent=True)
             run_command(f"systemctl enable --now {unit}", silent=True)
 
-    # 2. Disable Unauthorized Services (Whitelist Strategy)
     print_status("Auditing active services against whitelist (Aggressive Disabling)...")
-    # Get all active services
     active_services_output = run_command(
         "systemctl list-units --type=service --state=active --no-pager --no-legend"
     )
@@ -1051,7 +1055,6 @@ def manage_services(services_to_enable_units):
     if not active_services_output:
         return
 
-    # Build the complete whitelist (Essential + Required)
     whitelist = set(ESSENTIAL_SERVICES)
     whitelist.update(services_to_enable_units)
 
@@ -1061,10 +1064,8 @@ def manage_services(services_to_enable_units):
             unit_name = line.split()[0]
             service_name = unit_name.replace(".service", "")
 
-            # Check if the base name is in the whitelist
             is_allowed = False
             for item in whitelist:
-                # Handle exact matches and pattern matches (e.g., systemd-, user@)
                 if service_name.startswith(item):
                     is_allowed = True
                     break
@@ -1077,7 +1078,6 @@ def manage_services(services_to_enable_units):
             f"Found {len(services_to_disable)} unauthorized services running.", False
         )
         print(f"To Disable: {', '.join(services_to_disable)}")
-        # Prompt user before mass disabling
         if confirm_action(
             "Do you want to aggressively stop and disable these unauthorized services?"
         ):
@@ -1089,29 +1089,22 @@ def manage_services(services_to_enable_units):
 
 
 def software_services_and_hardening():
-    """V4: Manages software and services using Net Difference Logic."""
+    """V5: Manages software and services using Net Difference Logic."""
     print_header("Phase 5: Software, Services, and Advanced Hardening")
     if not confirm_action(
         "Begin Software and Service Management? (Installs/Removes software, stops services)"
     ):
         return
 
-    # 1. Install Tools
     run_command(
-        "apt-get install ufw auditd debsums net-tools apparmor-utils unattended-upgrades -yq"
+        "apt-get install ufw auditd debsums net-tools apparmor-utils -yq", silent=True
     )
-    run_command("systemctl enable --now auditd")
-    run_command("auditctl -e 1")
+    run_command("systemctl enable --now auditd", silent=True)
+    run_command("auditctl -e 1", silent=True)
 
-    # ===============================================================
-    # V4: NET DIFFERENCE SOFTWARE MANAGEMENT LOGIC
-    # ===============================================================
-
-    # 2. Build the ALLOW_LIST (Packages to install/keep)
     print_status("Calculating software Allow List (Protected Packages)...")
     ALLOW_LIST = set(REQUIRED_INSTALLS)
 
-    # Normalize services into packages and units
     services_to_enable_units = set()
     for service_input in REQUIRED_SERVICES_RAW:
         pkg, unit = service_input, service_input
@@ -1121,61 +1114,43 @@ def software_services_and_hardening():
         ALLOW_LIST.add(pkg)
         services_to_enable_units.add(unit)
 
-    # 3. Build the PURGE_LIST
     PURGE_LIST = set(PROHIBITED_SOFTWARE)
-
-    # 4. Calculate FINAL_PURGE_LIST (Difference)
-    # Final Purge List = Prohibited - Allow List
     FINAL_PURGE_LIST = PURGE_LIST.difference(ALLOW_LIST)
 
-    # Log the overrides for clarity
     overridden_purges = PURGE_LIST.intersection(ALLOW_LIST)
     if overridden_purges:
         print_status(
             f"OVERRIDE ACTIVE: Protecting required packages from purge: {list(overridden_purges)}",
             None,
         )
-        logging.info(f"SOFTWARE OVERRIDE: Keeping {list(overridden_purges)}")
 
-    logging.info(f"Allow List: {ALLOW_LIST}")
-    logging.info(f"Final Purge List: {FINAL_PURGE_LIST}")
-
-    # 5. Install Required Software/Services
     if ALLOW_LIST:
         print_status("Ensuring required software/services are installed...")
-        # Use apt-get install with --ignore-missing for robustness
         run_command(
             f"apt-get install --ignore-missing -yq {' '.join(ALLOW_LIST)}", silent=True
         )
 
-    # 6. Execute Purge
     if FINAL_PURGE_LIST:
         print_status("Purging unauthorized software...")
-        # Use apt-get purge with --ignore-missing
         purge_command = (
             f"apt-get purge --ignore-missing -yq {' '.join(FINAL_PURGE_LIST)}"
         )
         run_command(purge_command)
+        # V5: Snap Support for Aisleriot
+        for p in FINAL_PURGE_LIST:
+            run_command(f"snap remove {p}", silent=True)
+
         run_command("apt-get autoremove -yq")
 
-    # ===============================================================
-    # END NET DIFFERENCE LOGIC
-    # ===============================================================
-
-    # 7. Service Alignment and Disabling
     manage_services(services_to_enable_units)
-
-    # 8. Advanced Service Hardening (Deep Dive)
     harden_ssh(services_to_enable_units)
-    harden_vsftpd(services_to_enable_units)
-    # ... (Calls to harden_apache_php, harden_samba) ...
 
 
-# --- Phase 6: Integrity Check and Advanced Detection ---
+# --- Phase 6: Integrity Check and Advanced Detection (V5 Active Mode) ---
 
 
 def network_audit():
-    """Analyzes listening ports (ss) to detect backdoors."""
+    """Analyzes listening ports (ss) to detect backdoors AND KILLS THEM."""
     print_status("Analyzing listening network ports (ss -tulpn)...")
     system_ports = {
         "22",
@@ -1196,7 +1171,6 @@ def network_audit():
     if not listeners:
         return
 
-    found_suspicious = False
     for line in listeners.split("\n"):
         if line.startswith("tcp") or line.startswith("udp"):
             parts = line.split()
@@ -1205,18 +1179,36 @@ def network_audit():
             port = parts[4].split(":")[-1]
             process_info = parts[-1] if len(parts) > 5 else "Unknown"
 
-            if any(
-                proc in process_info
-                for proc in ["nc", "netcat", "bash", "sh", "python", "perl"]
-            ):
-                print_status(
-                    f"BACKDOOR DETECTED (Suspicious Process): Port {port} open by {process_info}",
-                    False,
-                )
-                logging.warning(
-                    f"BACKDOOR DETECTED: Port {port} open by {process_info}"
-                )
-                found_suspicious = True
+            # Logic: Find suspicious processes listening
+            if "users:((" in line:
+                try:
+                    proc_part = line.split("users:((")[1]
+                    proc_name = proc_part.split('"')[1]
+                    pid = int(proc_part.split("pid=")[1].split(",")[0])
+
+                    bad_procs = ["nc", "netcat", "ncat", "john", "hydra"]
+
+                    # V5 Fix: Don't flag sshd as 'sh'
+                    if proc_name in bad_procs or (
+                        proc_name == "sh" and "sshd" not in line
+                    ):
+                        print_status(
+                            f"ACTIVE BACKDOOR FOUND: {proc_name} (PID: {pid})", False
+                        )
+                        # ACTIVE KILL
+                        try:
+                            os.kill(pid, signal.SIGKILL)
+                            print_status(f"KILLED PID {pid}", True)
+                            # Find and delete executable
+                            exe = os.readlink(f"/proc/{pid}/exe")
+                            if os.path.exists(exe) and confirm_action(
+                                f"Delete executable {exe}?"
+                            ):
+                                os.remove(exe)
+                        except Exception as e:
+                            print(f"Failed to kill/delete: {e}")
+                except:
+                    pass
 
             elif port not in system_ports:
                 try:
@@ -1224,7 +1216,6 @@ def network_audit():
                         print_status(
                             f"UNEXPECTED PORT: Port {port} open by {process_info}", None
                         )
-                        found_suspicious = True
                 except ValueError:
                     continue
 
@@ -1238,7 +1229,6 @@ def suid_sgid_audit():
     if not suid_files:
         return
 
-    found_anomaly = False
     for filepath in suid_files.split("\n"):
         if filepath.strip():
             is_safe = False
@@ -1263,10 +1253,8 @@ def suid_sgid_audit():
                     print_status(
                         f"CRITICAL SUID/SGID (Potential Exploit): {details}", False
                     )
-                    logging.critical(f"CRITICAL SUID/SGID Binary: {details}")
                 else:
                     print_status(f"ANOMALOUS SUID/SGID Binary: {details}", None)
-                found_anomaly = True
 
 
 def sudoers_audit():
@@ -1279,7 +1267,6 @@ def sudoers_audit():
             sudoers_files.extend(files.split("\n"))
 
     threats = ["NOPASSWD:", "!authenticate"]
-    found_threat = False
 
     for filepath in sudoers_files:
         if filepath and os.path.isfile(filepath):
@@ -1297,16 +1284,6 @@ def sudoers_audit():
                                     f"DANGEROUS SUDOERS ENTRY in {filepath}: {line.strip()}",
                                     False,
                                 )
-                                logging.warning(
-                                    f"SUDOERS VULNERABILITY: {filepath}: {line.strip()}"
-                                )
-                                found_threat = True
-                                break
-    if found_threat:
-        print_status(
-            "NOTE: Sudo vulnerabilities found. Use 'visudo' to remove NOPASSWD tags manually.",
-            None,
-        )
 
 
 def persistence_hunt():
@@ -1338,7 +1315,6 @@ def persistence_hunt():
                     f"FOUND SSH KEY FILE: {keys_file}. Review manually for unauthorized keys.",
                     False,
                 )
-                logging.warning(f"SSH KEY FOUND: {keys_file}")
 
     suspicious_patterns = [
         r"nc\s+-",
@@ -1353,7 +1329,6 @@ def persistence_hunt():
         r"/dev/tcp/",
     ]
 
-    found_suspicious = False
     for location in locations:
         if location and location.strip() and os.path.isfile(location):
             content = run_command(f"cat {location}", silent=True)
@@ -1365,11 +1340,6 @@ def persistence_hunt():
                                 print_status(
                                     f"SUSPICIOUS ENTRY in {location}: {line}", False
                                 )
-                                logging.warning(
-                                    f"SUSPICIOUS ENTRY FOUND: {location}: {line}"
-                                )
-                                found_suspicious = True
-                                break
 
 
 def integrity_and_advanced_detection():
@@ -1389,9 +1359,7 @@ def integrity_and_advanced_detection():
 
     # Integrity Check (Debsums)
     print_status("Checking for poisoned binaries (debsums -c)...")
-    # V4: Ensure debsums is installed
     run_command("apt-get install debsums -yq", silent=True)
-    # Suppress stderr as debsums often complains about missing files
     debsums_output = run_command("debsums -c", silent=True, suppress_stderr=True)
 
     if debsums_output:
@@ -1430,7 +1398,6 @@ def firewall_activation():
     if not confirm_action("Configure and enable UFW?"):
         return
 
-    # V4 Fix: Correct ufw reset syntax
     run_command("ufw --force reset")
     run_command("ufw default deny incoming")
     run_command("ufw default allow outgoing")
@@ -1438,12 +1405,10 @@ def firewall_activation():
 
     # Allow required ports
     ports_allowed = set()
-
-    # Normalize required services list for port lookup
     normalized_services = set()
     for s in REQUIRED_SERVICES_RAW:
         if s in SERVICE_MAP:
-            normalized_services.add(SERVICE_MAP[s][1])  # Add the unit name
+            normalized_services.add(SERVICE_MAP[s][1])
 
     for service in normalized_services:
         found_ports = SERVICE_PORTS.get(service)
@@ -1475,46 +1440,29 @@ def main():
 
     start_time = time.time()
 
-    # Phase 1: Initialize, Update, Stabilize
     initialization_and_updates()
-
-    # Phase 2: Media Hunt
     run_media_hunt()
-
-    # Phase 3: User Management
     user_management_blitz()
-
-    # Phase 4: Configuration Hardening
     configuration_hardening()
-
-    # Phase 5: Software/Service Hardening (V4 Logic)
     software_services_and_hardening()
-
-    # Phase 6: Advanced Detection
     integrity_and_advanced_detection()
-
-    # Phase 7: Firewall
     firewall_activation()
 
     end_time = time.time()
     duration = (end_time - start_time) / 60
 
-    print_header("Juggernaut v4 Execution Complete")
-    logging.info(f"Juggernaut v4 Script Finished. Duration: {duration:.2f} minutes.")
+    print_header("Juggernaut v5 Execution Complete")
+    logging.info(f"Juggernaut v5 Script Finished. Duration: {duration:.2f} minutes.")
     print_status(f"Automation finished. Duration: {duration:.2f} minutes.")
     print_status(f"Review the log file: {LOG_FILE}")
     print_status("CRITICAL MANUAL CHECKS:", None)
     print_status(
-        "1. Verify PAM stability: Open a NEW terminal and run 'sudo ls'. If it fails, revert PAM backups.",
+        "1. Verify PAM stability: Open a NEW terminal and run 'sudo ls'.",
         None,
     )
     print_status(
-        "2. Manually investigate all findings from Phase 6 (Network Audit, SUID, Sudoers, Persistence).",
+        "2. Manually investigate all findings from Phase 6.",
         False,
-    )
-    print_status(
-        "3. Verify complex service configurations (e.g., specific website configs, database access).",
-        None,
     )
 
 
