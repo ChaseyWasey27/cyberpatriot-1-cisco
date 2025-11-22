@@ -1,0 +1,4 @@
+x2goserver
+thunderbird
+perl
+firefox
