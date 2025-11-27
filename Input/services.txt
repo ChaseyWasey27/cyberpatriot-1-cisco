@@ -1,2 +1,4 @@
-ssh
-x2goserver
+firefox
+vsftpd
+wireshark
+wireshark-common

@@ -1,4 +1,4 @@
-x2goserver
-thunderbird
-perl
 firefox
+vsftpd
+wireshark
+wireshark-common
