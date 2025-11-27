@@ -1043,9 +1043,9 @@ def configure_pam_common_auth():
         print_status("Failed to backup common-auth", False)
         return
 
-    # V6.2: Write a clean, known-good configuration instead of trying to patch
-    # This avoids the mess of having both tally2 and faillock
-    clean_config = """# /etc/pam.d/common-auth - Juggernaut V6.2 Clean Configuration
+    # V6.3: Write a clean, known-good configuration instead of trying to patch
+    # CRITICAL FIX: success=2 to skip both authfail AND pam_deny on successful auth
+    clean_config = """# /etc/pam.d/common-auth - Juggernaut V6.3 Clean Configuration
 #
 # Authentication settings common to all services
 # Account lockout: 5 failures, 15 minute lockout, applies to root
@@ -1054,22 +1054,23 @@ def configure_pam_common_auth():
 auth    required                        pam_faillock.so preauth silent deny=5 unlock_time=900 even_deny_root
 
 # Standard Unix authentication (nullok REMOVED for security)
-auth    [success=1 default=ignore]      pam_unix.so
+# CRITICAL: success=2 skips authfail AND pam_deny, landing on pam_permit
+auth    [success=2 default=ignore]      pam_unix.so
 
-# Faillock authfail - records failed attempts AFTER pam_unix
+# Faillock authfail - only reached if pam_unix FAILED
 auth    [default=die]                   pam_faillock.so authfail deny=5 unlock_time=900 even_deny_root
 
-# Fallback if no module succeeds
+# Fallback deny - only reached if pam_unix failed
 auth    requisite                       pam_deny.so
 
-# Prime the stack with a positive return value
+# Success path lands here (after skipping 2 from pam_unix success)
 auth    required                        pam_permit.so
 
-# Faillock authsucc - resets counter on success
-auth    sufficient                      pam_faillock.so authsucc
+# Reset faillock counter on successful auth
+auth    required                        pam_faillock.so authsucc
 
 # Delay on failed auth (4 seconds)
-auth    required                        pam_faildelay.so delay=4000000
+auth    optional                        pam_faildelay.so delay=4000000
 """
 
     try:
