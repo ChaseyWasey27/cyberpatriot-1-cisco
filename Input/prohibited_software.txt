@@ -76,6 +76,8 @@ freeciv
 openarena
 minetest
 doomsday
+doona
+xprobe
 gnome-mahjongg
 kpat
 kmines
