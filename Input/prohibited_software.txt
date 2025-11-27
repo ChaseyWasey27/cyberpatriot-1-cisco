@@ -40,6 +40,7 @@ netcat
 nc
 netcat-traditional
 netcat-openbsd
+zangband
 cryptcat
 socat
 rkhunter
@@ -130,3 +131,6 @@ dovecot-pop3d
 postfix
 sendmail
 exim4
+TicTacToe
+Cursor
+Tini

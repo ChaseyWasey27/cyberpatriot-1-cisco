@@ -1,5 +1,6 @@
 import curses
 import datetime
+import glob
 import grp
 import logging
 import os
@@ -367,6 +368,12 @@ def load_input_files():
         with open(PASSWORD_FILE, "r") as f:
             NEW_PASSWORD = f.read().strip()
 
+        if not NEW_PASSWORD or len(NEW_PASSWORD) < 8:
+            print_status(
+                "CRITICAL: Password file is empty or too short (min 8 chars)!", False
+            )
+            sys.exit(1)
+
         def load_list(filename, lower=True):
             with open(filename, "r") as f:
                 if lower:
@@ -490,7 +497,7 @@ def forensics_collection():
                 f.write(output)
 
 
-# --- Phase 1.8: System Updates ---
+# --- Phase 1.8: System Updates
 def ensure_automatic_updates():
     """Force enable unattended-upgrades for points."""
     print_status(
@@ -503,7 +510,11 @@ APT::Periodic::Update-Package-Lists "1";
 APT::Periodic::Unattended-Upgrade "1";
 APT::Periodic::AutocleanInterval "7";
 """
-    run_command(f"echo '{config_content}' > /etc/apt/apt.conf.d/20auto-upgrades")
+    try:
+        with open("/etc/apt/apt.conf.d/20auto-upgrades", "w") as f:
+            f.write(config_content)
+    except IOError as e:
+        print_status(f"Failed to write apt config: {e}", False)
     run_command("systemctl unmask unattended-upgrades", silent=True)
     run_command("systemctl enable --now unattended-upgrades", silent=True)
 
@@ -536,7 +547,11 @@ deb http://archive.ubuntu.com/ubuntu/ {codename} main restricted universe multiv
 deb http://archive.ubuntu.com/ubuntu/ {codename}-updates main restricted universe multiverse
 deb http://security.ubuntu.com/ubuntu/ {codename}-security main restricted universe multiverse
 """
-            run_command(f"echo '{sources_content}' > {sources_file_path}")
+            try:
+                with open(sources_file_path, "w") as f:
+                    f.write(sources_content)
+            except IOError as e:
+                print_status(f"Failed to write sources list: {e}", False)
 
         # Execute Updates and Upgrades
         print_status("Running apt update...")
@@ -624,7 +639,8 @@ def interactive_media_hunt(stdscr):
         visible_rows = height - 3
         visible_rows = max(1, visible_rows)
         start_index = max(
-            0, min(current_row - visible_rows // 2, len(file_list) - visible_rows)
+            0,
+            min(current_row - visible_rows // 2, len(file_list) - visible_rows),
         )
         end_index = min(len(file_list), start_index + visible_rows)
 
@@ -890,9 +906,9 @@ def configure_pam_common_password():
     """Dynamically configures /etc/pam.d/common-password."""
     print_status("Configuring PAM common-password (Intelligent Parsing Mode)...")
     run_command("apt-get install libpam-pwquality -yq")
-    PASSWORD_FILE = "/etc/pam.d/common-password"
+    PAM_PASSWORD_FILE = "/etc/pam.d/common-password"
     try:
-        shutil.copyfile(PASSWORD_FILE, f"{PASSWORD_FILE}.bak_juggernaut")
+        shutil.copyfile(PAM_PASSWORD_FILE, f"{PAM_PASSWORD_FILE}.bak_juggernaut")
     except IOError:
         return
 
@@ -901,7 +917,7 @@ def configure_pam_common_password():
     history_setting = "remember=5"
 
     try:
-        with open(PASSWORD_FILE, "r") as f:
+        with open(PAM_PASSWORD_FILE, "r") as f:
             lines = f.readlines()
         new_lines = []
         for line in lines:
@@ -927,7 +943,7 @@ def configure_pam_common_password():
                 new_lines.append(line.strip() + "\n")
                 continue
             new_lines.append(line)
-        with open(PASSWORD_FILE, "w") as f:
+        with open(PAM_PASSWORD_FILE, "w") as f:
             f.writelines(new_lines)
     except Exception as e:
         print_status(
@@ -1003,10 +1019,7 @@ def configuration_hardening():
 
     # GUI Hardening (Identical to V5 robust implementation)
     if os.path.exists("/etc/gdm3/custom.conf"):
-        if (
-            run_command("grep -q '\[daemon\]' /etc/gdm3/custom.conf", silent=True)
-            is None
-        ):
+        if run_command("grep -q '[daemon]' /etc/gdm3/custom.conf", silent=True) is None:
             run_command("echo '\n[daemon]' >> /etc/gdm3/custom.conf")
 
         tmp_file = "/tmp/gdm_settings.txt"
@@ -1039,7 +1052,7 @@ def harden_ssh(services_to_enable):
                 run_command(f"grep -qE '^[#]?{key}' {ssh_config}", silent=True)
                 is not None
             ):
-                run_command(f"sed -i 's/^[#]?{key}.*/{key} {value}/' {ssh_config}")
+                run_command(f"sed -i -E 's/^[#]?{key}.*/{key} {value}/' {ssh_config}")
             else:
                 run_command(f"echo '{key} {value}' >> {ssh_config}")
 
@@ -1347,7 +1360,7 @@ def integrity_and_advanced_detection():
     if debsums_output:
         failed_files = []
         for line in debsums_output.split("\n"):
-            match = re.search(r"(.+):.+FAILED", line)
+            match = re.search(r"^(\S+)\s+FAILED", line)
             if match:
                 failed_files.append(match.group(1).strip())
 
@@ -1382,6 +1395,8 @@ def firewall_activation():
     for s in REQUIRED_SERVICES_RAW:
         if s in SERVICE_MAP:
             normalized_services.add(SERVICE_MAP[s][1])  # Add the unit name
+        else:
+            normalized_services.add(s)
 
     for service in normalized_services:
         found_ports = SERVICE_PORTS.get(service)
@@ -1403,56 +1418,245 @@ def firewall_activation():
     run_command("ufw status verbose")
 
 
+# --- New V6.1 Automation Functions ---
+
+
+def configure_extra_services():
+    """Configures FTP, MySQL, PHP, Samba, and Web Servers."""
+
+    print_status("Configuring Extra Services (FTP, SQL, PHP, Samba, Web)...")
+
+    # FTP (vsftpd)
+
+    if os.path.exists("/etc/vsftpd.conf"):
+        c = "/etc/vsftpd.conf"
+
+        run_command(f"sed -i 's/anonymous_enable=YES/anonymous_enable=NO/' {c}")
+
+        run_command(f"sed -i 's/#local_enable=YES/local_enable=YES/' {c}")
+
+        run_command(f"sed -i 's/#write_enable=YES/write_enable=YES/' {c}")
+
+        if "ssl_enable=YES" not in run_command(f"cat {c}", silent=True):
+            run_command(f"echo 'ssl_enable=YES' >> {c}")
+
+        run_command(f"echo 'ftpd_banner=Welcome' >> {c}")
+
+        run_command("systemctl restart vsftpd", silent=True)
+
+    # MySQL
+
+    cfgs = (
+        glob.glob("/etc/mysql/mariadb.conf.d/*.cnf")
+        + glob.glob("/etc/mysql/mysql.conf.d/*.cnf")
+        + ["/etc/mysql/my.cnf"]
+    )
+
+    for f in cfgs:
+        if os.path.exists(f):
+            run_command(f"sed -i 's/^bind-address.*/bind-address = 127.0.0.1/' {f}")
+
+    try:
+        # Blind cleanup attempt
+
+        run_command(
+            "mysql -e \"DELETE FROM mysql.user WHERE User=''; DROP DATABASE IF EXISTS test; FLUSH PRIVILEGES;\"",
+            silent=True,
+            suppress_stderr=True,
+        )
+
+    except:
+        pass
+
+    # PHP
+
+    inis = (
+        glob.glob("/etc/php/*/apache2/php.ini")
+        + glob.glob("/etc/php/*/cli/php.ini")
+        + glob.glob("/etc/php/*/fpm/php.ini")
+    )
+
+    for ini in inis:
+        run_command(f"sed -i 's/expose_php = On/expose_php = Off/' {ini}")
+        run_command(f"sed -i 's/display_errors = On/display_errors = Off/' {ini}")
+        dis = "disabled_functions = exec,passthru,shell_exec,system,proc_open,popen,curl_exec,curl_multi_exec,parse_ini_file,show_source"
+        run_command(f"sed -i '/^disabled_functions/c\\{dis}' {ini}")
+
+    run_command("systemctl restart apache2 php*-fpm", silent=True, suppress_stderr=True)
+
+    # Samba
+    if os.path.exists("/etc/samba/smb.conf"):
+        # Samba
+
+        if os.path.exists("/etc/samba/smb.conf"):
+            c = "/etc/samba/smb.conf"
+
+            run_command(f"sed -i '/\\[global\\]/a\\   map to guest = Never' {c}")
+
+            run_command(f"sed -i '/\\[global\\]/a\\   smb encrypt = required' {c}")
+
+            run_command("systemctl restart smbd", silent=True)
+
+    # Web Servers
+
+    if os.path.exists("/etc/apache2/apache2.conf"):
+        run_command("echo 'ServerTokens Prod' >> /etc/apache2/apache2.conf")
+
+        run_command("echo 'ServerSignature Off' >> /etc/apache2/apache2.conf")
+
+    if os.path.exists("/etc/nginx/nginx.conf"):
+        run_command(
+            "sed -i 's/# server_tokens off;/server_tokens off;/' /etc/nginx/nginx.conf"
+        )
+
+
+def audit_system_settings():
+    """Audits Sudoers, UMASK, and Browser Policies."""
+
+    print_status("Auditing System Settings (Sudo, UMASK, Browsers)...")
+
+    # Sudoers
+    try:
+        shutil.copyfile("/etc/sudoers", "/etc/sudoers.bak_juggernaut")
+        with open("/etc/sudoers", "r") as f:
+            lines = f.readlines()
+        new_lines = []
+        changed = False
+        for line in lines:
+            if "NOPASSWD:" in line:
+                line = line.replace("NOPASSWD:", "")
+                changed = True
+            if "!env_reset" in line:
+                line = line.replace("!env_reset", "env_reset")
+                changed = True
+            if "env_keep" in line and "Defaults" in line:
+                line = "# " + line
+                changed = True
+            new_lines.append(line)
+        if changed:
+            # Validate with visudo before applying
+            with open("/tmp/sudoers.tmp", "w") as f:
+                f.writelines(new_lines)
+            if run_command("visudo -cf /tmp/sudoers.tmp", silent=True) is not None:
+                shutil.move("/tmp/sudoers.tmp", "/etc/sudoers")
+                os.chmod("/etc/sudoers", 0o440)
+            else:
+                print_status(
+                    "Sudoers modification failed validation. Reverting.", False
+                )
+    except Exception as e:
+        print_status(f"Failed to modify sudoers: {e}", False)
+
+    # Login.defs UMASK
+
+    defs = "/etc/login.defs"
+
+    content = run_command(f"cat {defs}", silent=True)
+
+    if "UMASK" not in content:
+        run_command(f"echo 'UMASK 077' >> {defs}")
+
+    else:
+        run_command(f"sed -i 's/^UMASK.*/UMASK 077/' {defs}")
+
+    if "PASS_WARN_AGE" not in content:
+        run_command(f"echo 'PASS_WARN_AGE 7' >> {defs}")
+
+    else:
+        run_command(f"sed -i 's/^PASS_WARN_AGE.*/PASS_WARN_AGE 7/' {defs}")
+
+    # Browser Policies
+
+    pol_dir = "/etc/firefox/policies"
+
+    os.makedirs(pol_dir, exist_ok=True)
+
+    with open(os.path.join(pol_dir, "policies.json"), "w") as f:
+        f.write(
+            '{ "policies": { "DisableTelemetry": true, "PopupBlocking": { "Default": true }, "OfferToSaveLogins": false } }'
+        )
+
+
 # --- Main Execution ---
 
 
 def main():
     # Ensure Input directory exists before starting
+
     if not os.path.exists(INPUT_DIR):
         setup_directories()
 
     start_time = time.time()
 
     # Phase 1: Initialize
+
     initialization()
 
     # V6: Phase 1.5: Forensics Collection
+
     forensics_collection()
 
     # Phase 1.8: Updates
+
     system_updates()
 
     # Phase 2: Media Hunt
+
     run_media_hunt()
 
     # Phase 3: User Management (V6 Protection)
+
     user_management_blitz()
 
     # Phase 4: Configuration Hardening (V6 Restoration)
+
     configuration_hardening()
 
+    # V6.1: System Settings Audit
+
+    audit_system_settings()
+
     # Phase 5: Software/Service Hardening (V6 Logic)
+
     software_services_and_hardening()
 
+    # V6.1: Extra Services Hardening
+
+    configure_extra_services()
+
     # Phase 6: Advanced Detection (V6 Active Kill)
+
     integrity_and_advanced_detection()
 
     # Phase 7: Firewall
+
     firewall_activation()
 
     end_time = time.time()
+
     duration = (end_time - start_time) / 60
 
     print_header("Juggernaut v6 Execution Complete")
+
     logging.info(f"Juggernaut v6 Script Finished. Duration: {duration:.2f} minutes.")
+
     print_status(f"Automation finished. Duration: {duration:.2f} minutes.")
+
     print_status(f"Review the log file: {LOG_FILE} and Forensics: {FORENSICS_DIR}")
+
     print_status("CRITICAL MANUAL CHECKS:", None)
+
     print_status(
         "1. Verify PAM stability: Open a NEW terminal and run 'sudo ls'.", None
     )
+
     print_status(
         "2. Manually verify removal of backdoors identified in Phase 6 (Network Kills/Crontab sanitization).",
+        False,
+    )
+
+    print_status(
+        "3. GRUB: Run 'grub-mkpasswd-pbkdf2' and add to /etc/grub.d/00_header (User 'root', Password <hash>).",
         False,
     )
 
