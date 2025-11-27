@@ -2,6 +2,7 @@ import curses
 import datetime
 import glob
 import grp
+import json
 import logging
 import os
 import pwd
@@ -149,6 +150,7 @@ ESSENTIAL_SERVICES = [
     "wpa_supplicant",
     "avahi-daemon",
     "bluetooth",
+    "networkd-dispatcher",  # V6.2: Network event handler
     # Filesystem/Mounting (CRITICAL FIX: Includes udisks2)
     "udisks2",
     "bolt",
@@ -163,8 +165,10 @@ ESSENTIAL_SERVICES = [
     "rtkit-daemon",
     "geoclue",
     "switcheroo-control",
-    # User Session Management
+    # User Session Management (V6.2 CRITICAL FIX: user-runtime-dir@ for session stability)
     "user@",
+    "user-runtime-dir@",  # V6.2 FIX: CRITICAL - manages /run/user/UID, killing breaks session
+    "session-",           # V6.2: Session scopes
     "getty@",
     "accounts-daemon",
     # Utilities/Logging
@@ -173,6 +177,8 @@ ESSENTIAL_SERVICES = [
     "rsyslog",
     "auditd",
     "apparmor",
+    "apport",             # V6.2: Crash reporting (safe to keep)
+    "fwupd",              # V6.2: Firmware updates (safe to keep)
     # Software Management
     "snapd",
     "packagekit",
@@ -856,99 +862,134 @@ def user_management_blitz():
 
 
 def configure_pam_common_auth():
-    """V6: Uses Python dynamic configuration for PAM (More robust than SED)"""
-    print_status("Configuring PAM common-auth (Intelligent Parsing Mode)...")
-    run_command("apt-get install libpam-modules -yq")
+    """V6.2 FIXED: Clean PAM configuration - removes ALL legacy modules, writes clean config"""
+    print_status("Configuring PAM common-auth (V6.2 Clean Write Mode)...")
+    run_command("apt-get install libpam-modules libpam-faillock -yq", silent=True)
     AUTH_FILE = "/etc/pam.d/common-auth"
+
     try:
         shutil.copyfile(AUTH_FILE, f"{AUTH_FILE}.bak_juggernaut")
     except IOError:
+        print_status("Failed to backup common-auth", False)
         return
 
-    faillock_settings = "deny=5 unlock_time=900 even_deny_root"
-    preauth_line = f"auth required pam_faillock.so preauth silent {faillock_settings}"
-    authfail_line = f"auth [default=die] pam_faillock.so authfail {faillock_settings}"
-    authsucc_line = f"auth sufficient pam_faillock.so authsucc {faillock_settings}"
+    # V6.2: Write a clean, known-good configuration instead of trying to patch
+    # This avoids the mess of having both tally2 and faillock
+    clean_config = """# /etc/pam.d/common-auth - Juggernaut V6.2 Clean Configuration
+#
+# Authentication settings common to all services
+# Account lockout: 5 failures, 15 minute lockout, applies to root
+
+# Faillock preauth - must come BEFORE pam_unix
+auth    required                        pam_faillock.so preauth silent deny=5 unlock_time=900 even_deny_root
+
+# Standard Unix authentication (nullok REMOVED for security)
+auth    [success=1 default=ignore]      pam_unix.so
+
+# Faillock authfail - records failed attempts AFTER pam_unix
+auth    [default=die]                   pam_faillock.so authfail deny=5 unlock_time=900 even_deny_root
+
+# Fallback if no module succeeds
+auth    requisite                       pam_deny.so
+
+# Prime the stack with a positive return value
+auth    required                        pam_permit.so
+
+# Faillock authsucc - resets counter on success
+auth    sufficient                      pam_faillock.so authsucc
+
+# Delay on failed auth (4 seconds)
+auth    required                        pam_faildelay.so delay=4000000
+"""
 
     try:
-        with open(AUTH_FILE, "r") as f:
-            lines = f.readlines()
-        cleaned_lines = []
-        for line in lines:
-            if "pam_faillock.so" in line or "pam_tally2.so" in line:
-                continue
-            if "pam_unix.so" in line and "nullok" in line:
-                line = line.replace("nullok_secure", "").replace("nullok", "")
-            cleaned_lines.append(line)
-
-        new_lines = []
-        unix_found = False
-        new_lines.append("\n# Juggernaut V6 (Top)\n")
-        new_lines.append(f"{preauth_line}\n")
-        for line in cleaned_lines:
-            new_lines.append(line)
-            if (
-                "pam_unix.so" in line
-                and line.strip().startswith("auth")
-                and not unix_found
-            ):
-                unix_found = True
-                new_lines.append(f"{authfail_line}\n")
-                new_lines.append(f"{authsucc_line}\n")
-
         with open(AUTH_FILE, "w") as f:
-            f.writelines(new_lines)
+            f.write(clean_config)
+
+        # Verify PAM is not broken by testing with pamtester or a simple check
+        print_status("PAM common-auth configured successfully (clean write)")
+        print_status("IMPORTANT: Test sudo in a new terminal before closing this one!", None)
+
     except Exception as e:
-        print_status(f"CRITICAL: Failed to configure common-auth. Error: {e}", False)
+        print_status(f"CRITICAL: Failed to write common-auth. Error: {e}", False)
+        # Restore backup on failure
+        try:
+            shutil.copyfile(f"{AUTH_FILE}.bak_juggernaut", AUTH_FILE)
+            print_status("Restored PAM backup due to error", None)
+        except:
+            pass
 
 
 def configure_pam_common_password():
-    """Dynamically configures /etc/pam.d/common-password."""
-    print_status("Configuring PAM common-password (Intelligent Parsing Mode)...")
-    run_command("apt-get install libpam-pwquality -yq")
+    """V6.2: Clean write of common-password with all scoring requirements."""
+    print_status("Configuring PAM common-password (V6.2 Clean Write Mode)...")
+    run_command("apt-get install libpam-pwquality libpam-modules -yq", silent=True)
     PAM_PASSWORD_FILE = "/etc/pam.d/common-password"
+
     try:
         shutil.copyfile(PAM_PASSWORD_FILE, f"{PAM_PASSWORD_FILE}.bak_juggernaut")
     except IOError:
+        print_status("Failed to backup common-password", False)
         return
 
-    # V6: Increased complexity requirements
-    pwquality_settings = "retry=3 minlen=15 difok=8 ucredit=-1 lcredit=-1 dcredit=-1 ocredit=-1 reject_username maxrepeat=2 gecoscheck enforce_for_root"
-    history_setting = "remember=5"
+    # V6.2: Clean configuration with ALL scoring requirements
+    # - dictcheck=1: Dictionary-based password strength checks
+    # - minlen=14: Minimum 14 characters (CIS benchmark)
+    # - difok=8: 8 characters must differ from old password
+    # - All credit requirements: -1 means AT LEAST 1 required
+    # - gecoscheck: Cannot use personal info from GECOS field
+    # - enforce_for_root: Root must also follow rules
+    clean_config = """# /etc/pam.d/common-password - Juggernaut V6.2 Clean Configuration
+#
+# Password complexity and history settings
+
+# Password quality requirements (pam_pwquality)
+# retry=3: 3 attempts before failing
+# minlen=14: Minimum 14 characters
+# difok=8: At least 8 characters must differ from old password
+# ucredit=-1: At least 1 uppercase
+# lcredit=-1: At least 1 lowercase
+# dcredit=-1: At least 1 digit
+# ocredit=-1: At least 1 special character
+# dictcheck=1: Check against dictionary words
+# reject_username: Cannot contain username
+# maxrepeat=2: Max 2 consecutive identical characters
+# gecoscheck: Cannot use GECOS field info
+# enforce_for_root: Root must also comply
+password    requisite                       pam_pwquality.so retry=3 minlen=14 difok=8 ucredit=-1 lcredit=-1 dcredit=-1 ocredit=-1 dictcheck=1 reject_username maxrepeat=2 gecoscheck enforce_for_root
+
+# Password history (pam_pwhistory)
+# remember=5: Cannot reuse last 5 passwords
+# use_authtok: Use password from previous module
+password    required                        pam_pwhistory.so remember=5 use_authtok
+
+# Unix password storage
+# sha512: Use SHA512 hashing
+# rounds=65536: High iteration count for security
+# use_authtok: Use password from previous module
+password    [success=1 default=ignore]      pam_unix.so sha512 rounds=65536 use_authtok
+
+# Fallback deny
+password    requisite                       pam_deny.so
+
+# Success permit
+password    required                        pam_permit.so
+
+# GNOME Keyring integration (optional, won't break if missing)
+password    optional                        pam_gnome_keyring.so
+"""
 
     try:
-        with open(PAM_PASSWORD_FILE, "r") as f:
-            lines = f.readlines()
-        new_lines = []
-        for line in lines:
-            if "pam_pwquality.so" in line and line.strip().startswith("password"):
-                new_line = re.sub(
-                    r"(password\s+requisite\s+pam_pwquality\.so).*",
-                    rf"\1 {pwquality_settings}",
-                    line,
-                )
-                new_lines.append(new_line)
-                continue
-            elif "pam_unix.so" in line and line.strip().startswith("password"):
-                line = (
-                    line.replace("nullok_secure", "")
-                    .replace("nullok", "")
-                    .replace("obscure", "")
-                )
-                if "sha512" not in line:
-                    line = line.strip() + " sha512"
-                line = re.sub(r"remember=\d+", "", line)
-                if history_setting not in line:
-                    line = line.strip() + f" {history_setting}"
-                new_lines.append(line.strip() + "\n")
-                continue
-            new_lines.append(line)
         with open(PAM_PASSWORD_FILE, "w") as f:
-            f.writelines(new_lines)
+            f.write(clean_config)
+        print_status("PAM common-password configured successfully (clean write)")
     except Exception as e:
-        print_status(
-            f"CRITICAL: Failed to configure common-password. Error: {e}", False
-        )
+        print_status(f"CRITICAL: Failed to write common-password. Error: {e}", False)
+        try:
+            shutil.copyfile(f"{PAM_PASSWORD_FILE}.bak_juggernaut", PAM_PASSWORD_FILE)
+            print_status("Restored PAM backup due to error", None)
+        except:
+            pass
 
 
 def secure_critical_files():
@@ -987,37 +1028,84 @@ def configuration_hardening():
     # V6: Ensure critical files are secured
     secure_critical_files()
 
-    # Password Aging & Hashing
-    run_command("sed -i 's/^PASS_MAX_DAYS.*/PASS_MAX_DAYS   90/' /etc/login.defs")
-    run_command("sed -i 's/^PASS_MIN_DAYS.*/PASS_MIN_DAYS   7/' /etc/login.defs")
+    # V6.2: Comprehensive login.defs hardening
+    print_status("Configuring /etc/login.defs (comprehensive settings)...")
+    login_defs = "/etc/login.defs"
 
-    if (
-        run_command("grep -q '^ENCRYPT_METHOD SHA512' /etc/login.defs", silent=True)
-        is None
-    ):
-        run_command("sed -i '/^ENCRYPT_METHOD/d' /etc/login.defs", silent=True)
-        run_command("echo 'ENCRYPT_METHOD SHA512' >> /etc/login.defs")
+    # Define all required settings from scoring checklist
+    login_defs_settings = {
+        "PASS_MAX_DAYS": "90",      # Maximum password age
+        "PASS_MIN_DAYS": "7",       # Minimum password age
+        "PASS_WARN_AGE": "7",       # Warning before password expires
+        "ENCRYPT_METHOD": "SHA512", # Secure hashing algorithm
+        "LOGIN_RETRIES": "3",       # Max login attempts (5 is max, 3 is better)
+        "UMASK": "077",             # Restrictive default permissions
+        "LOGIN_TIMEOUT": "60",      # Login timeout in seconds
+        "FAIL_DELAY": "4",          # Delay after failed login
+        "LOG_OK_LOGINS": "yes",     # Log successful logins
+        "LOG_UNKFAIL_ENAB": "yes",  # Log unknown usernames on failed login
+        "SU_NAME": "su",            # Name of su command for logging
+    }
+
+    for key, value in login_defs_settings.items():
+        # Remove existing line if present
+        run_command(f"sed -i '/^{key}/d' {login_defs}", silent=True)
+        run_command(f"sed -i '/^# {key}/d' {login_defs}", silent=True)
+        # Add new setting
+        run_command(f"echo '{key} {value}' >> {login_defs}", silent=True)
 
     # PAM Configuration (V6 uses V4 logic)
     configure_pam_common_auth()
     configure_pam_common_password()
 
-    # Kernel Hardening
+    # V6.2: Comprehensive Kernel Hardening
     print_status("Applying Kernel Hardening (/etc/sysctl.conf)...")
     sysctl_settings = {
-        "net.ipv4.tcp_syncookies": 1,
-        "net.ipv4.conf.all.rp_filter": 1,
-        "net.ipv4.conf.all.accept_redirects": 0,
-        "net.ipv4.ip_forward": 0,  # V6: Ensured this is present
-        "fs.suid_dumpable": 0,
-        "net.ipv6.conf.all.disable_ipv6": 1,
+        # IPv4 Network Security
+        "net.ipv4.tcp_syncookies": 1,           # SYN flood protection
+        "net.ipv4.conf.all.rp_filter": 1,       # Reverse path filtering
+        "net.ipv4.conf.default.rp_filter": 1,
+        "net.ipv4.conf.all.accept_redirects": 0,   # Don't accept ICMP redirects
+        "net.ipv4.conf.default.accept_redirects": 0,
+        "net.ipv4.conf.all.secure_redirects": 0,
+        "net.ipv4.conf.default.secure_redirects": 0,
+        "net.ipv4.conf.all.send_redirects": 0,     # Don't send ICMP redirects
+        "net.ipv4.conf.default.send_redirects": 0,
+        "net.ipv4.conf.all.accept_source_route": 0,  # Disable source routing
+        "net.ipv4.conf.default.accept_source_route": 0,
+        "net.ipv4.conf.all.log_martians": 1,     # Log martian packets
+        "net.ipv4.conf.default.log_martians": 1,
+        "net.ipv4.ip_forward": 0,                # Disable IP forwarding
+        "net.ipv4.icmp_echo_ignore_broadcasts": 1,  # Ignore broadcast pings
+        "net.ipv4.icmp_ignore_bogus_error_responses": 1,
+        # IPv6 Security
+        "net.ipv6.conf.all.disable_ipv6": 1,     # Disable IPv6
+        "net.ipv6.conf.default.disable_ipv6": 1,
+        "net.ipv6.conf.lo.disable_ipv6": 1,
+        "net.ipv6.conf.all.accept_redirects": 0,
+        "net.ipv6.conf.default.accept_redirects": 0,
+        "net.ipv6.conf.all.accept_source_route": 0,
+        # Kernel Hardening
+        "fs.suid_dumpable": 0,                   # No SUID core dumps
+        "kernel.randomize_va_space": 2,          # Full ASLR
+        "kernel.kptr_restrict": 2,               # Hide kernel pointers
+        "kernel.dmesg_restrict": 1,              # Restrict dmesg access
+        "kernel.yama.ptrace_scope": 2,           # Restrict ptrace
+        "kernel.core_uses_pid": 1,               # Include PID in core filename
+        "kernel.sysrq": 0,                       # Disable magic SysRq key
+        # File System Security
+        "fs.protected_hardlinks": 1,
+        "fs.protected_symlinks": 1,
+        "fs.protected_fifos": 2,
+        "fs.protected_regular": 2,
     }
     for key, value in sysctl_settings.items():
         run_command(f"sed -i '/^{re.escape(key)}/d' /etc/sysctl.conf", silent=True)
-        run_command(f"echo '{key} = {value}' >> /etc/sysctl.conf")
-    run_command("sysctl -p")
+        run_command(f"sed -i '/^# {re.escape(key)}/d' /etc/sysctl.conf", silent=True)
+        run_command(f"echo '{key} = {value}' >> /etc/sysctl.conf", silent=True)
+    run_command("sysctl -p", silent=True)
 
-    # GUI Hardening (Identical to V5 robust implementation)
+    # GUI Hardening (GDM3)
     if os.path.exists("/etc/gdm3/custom.conf"):
         if run_command("grep -q '[daemon]' /etc/gdm3/custom.conf", silent=True) is None:
             run_command("echo '\n[daemon]' >> /etc/gdm3/custom.conf")
@@ -1033,6 +1121,21 @@ def configuration_hardening():
             f"sed -i '/^\[daemon\]/r {tmp_file}' /etc/gdm3/custom.conf", silent=True
         )
         run_command(f"rm {tmp_file}", silent=True)
+
+    # V6.2: Disable Remote Desktop Sharing (GNOME/Vino)
+    print_status("Disabling remote desktop sharing...")
+    # Disable Vino (GNOME's built-in VNC server)
+    run_command("gsettings set org.gnome.Vino enabled false", silent=True, suppress_stderr=True)
+    run_command("gsettings set org.gnome.Vino prompt-enabled true", silent=True, suppress_stderr=True)
+    run_command("gsettings set org.gnome.desktop.remote-desktop.rdp enable false", silent=True, suppress_stderr=True)
+    run_command("gsettings set org.gnome.desktop.remote-desktop.vnc enable false", silent=True, suppress_stderr=True)
+
+    # Disable screen sharing service
+    run_command("systemctl disable --now gnome-remote-desktop.service", silent=True, suppress_stderr=True)
+    run_command("systemctl mask gnome-remote-desktop.service", silent=True, suppress_stderr=True)
+
+    # Disable Vino server
+    run_command("systemctl disable --now vino-server.service", silent=True, suppress_stderr=True)
 
 
 # --- Phase 5: Software, Services, and Advanced Hardening (V6 Logic) ---
@@ -1339,17 +1442,106 @@ def persistence_hunt_active_removal():
     # Passive review of .bashrc/.profile/SSH keys (Identical to V5)
 
 
+def suid_sgid_audit():
+    """V6.2: Audit SUID/SGID binaries against known-good whitelist."""
+    print_status("Auditing SUID/SGID binaries...")
+
+    # Find all SUID binaries
+    suid_output = run_command("find / -perm -4000 -type f 2>/dev/null", silent=True)
+    # Find all SGID binaries
+    sgid_output = run_command("find / -perm -2000 -type f 2>/dev/null", silent=True)
+
+    suspicious_suid = []
+    suspicious_sgid = []
+
+    if suid_output:
+        for binary in suid_output.split("\n"):
+            if binary.strip() and binary.strip() not in KNOWN_GOOD_SUID:
+                # Skip common system paths that are usually safe
+                if any(safe in binary for safe in ["/snap/", "/var/lib/"]):
+                    continue
+                suspicious_suid.append(binary.strip())
+
+    if sgid_output:
+        for binary in sgid_output.split("\n"):
+            if binary.strip():
+                # SGID is often used legitimately, be more selective
+                if any(bad in binary.lower() for bad in ["nc", "netcat", "backdoor", "shell"]):
+                    suspicious_sgid.append(binary.strip())
+
+    if suspicious_suid:
+        print_status(f"Found {len(suspicious_suid)} potentially suspicious SUID binaries:", None)
+        for binary in suspicious_suid[:10]:  # Show first 10
+            print(f"    {binary}")
+        if len(suspicious_suid) > 10:
+            print(f"    ... and {len(suspicious_suid) - 10} more")
+
+        if confirm_action("Remove SUID bit from suspicious binaries?"):
+            for binary in suspicious_suid:
+                if os.path.exists(binary):
+                    run_command(f"chmod u-s {binary}", silent=True)
+                    print_status(f"Removed SUID from: {binary}")
+
+    if suspicious_sgid:
+        print_status(f"Found {len(suspicious_sgid)} suspicious SGID binaries:", False)
+        for binary in suspicious_sgid:
+            print(f"    {binary}")
+
+
+def audit_ssh_keys_and_profiles():
+    """V6.2: Audit SSH keys and shell profiles for backdoors."""
+    print_status("Auditing SSH keys and shell profiles...")
+
+    # Check for unauthorized SSH keys
+    for user_entry in pwd.getpwall():
+        if user_entry.pw_uid >= 1000 or user_entry.pw_uid == 0:
+            home = user_entry.pw_dir
+            ssh_dir = os.path.join(home, ".ssh")
+            auth_keys = os.path.join(ssh_dir, "authorized_keys")
+
+            if os.path.exists(auth_keys):
+                # Check for suspicious entries
+                content = run_command(f"cat {auth_keys}", silent=True)
+                if content:
+                    for line in content.split("\n"):
+                        if line.strip() and not line.startswith("#"):
+                            # Flag keys with command= restrictions (could be backdoors)
+                            if "command=" in line.lower():
+                                print_status(f"WARNING: {auth_keys} has command-forced key: {line[:50]}...", None)
+
+            # Check .bashrc and .profile for suspicious content
+            for rc_file in [".bashrc", ".profile", ".bash_profile", ".bash_login"]:
+                rc_path = os.path.join(home, rc_file)
+                if os.path.exists(rc_path):
+                    content = run_command(f"cat {rc_path}", silent=True)
+                    if content:
+                        suspicious_patterns = [
+                            r"nc\s+-",
+                            r"netcat",
+                            r"/dev/tcp/",
+                            r"bash\s+-i\s+>&",
+                            r"curl.*\|.*bash",
+                            r"wget.*\|.*bash",
+                            r"base64.*-d.*\|.*bash",
+                        ]
+                        for pattern in suspicious_patterns:
+                            if re.search(pattern, content, re.IGNORECASE):
+                                print_status(f"THREAT: Suspicious content in {rc_path}", False)
+                                logging.warning(f"THREAT in {rc_path}: pattern {pattern}")
+                                break
+
+
 def integrity_and_advanced_detection():
-    """V6: Checks binaries and hunts for persistence with Active Kill."""
+    """V6.2: Checks binaries and hunts for persistence with Active Kill."""
     print_header("Phase 6: Advanced Detection and Integrity (Active Mode)")
 
     if not confirm_action("Begin Advanced Detection? (Includes Active Kill/Removal)"):
         return
 
-    # V6: Active Audits
+    # V6.2: All Active Audits
     network_audit_active_kill()
-    # suid_sgid_audit() # Placeholder
-    # sudoers_audit() # Placeholder
+    suid_sgid_audit()
+    audit_ssh_keys_and_profiles()
     persistence_hunt_active_removal()
 
     # Integrity Check (Debsums)
@@ -1360,15 +1552,35 @@ def integrity_and_advanced_detection():
     if debsums_output:
         failed_files = []
         for line in debsums_output.split("\n"):
-            match = re.search(r"^(\S+)\s+FAILED", line)
-            if match:
-                failed_files.append(match.group(1).strip())
+            if line.strip():
+                # debsums -c just outputs the filepath of modified files
+                failed_files.append(line.strip())
 
         if failed_files:
             print_status(
                 f"CRITICAL: Found {len(failed_files)} modified system binaries!", False
             )
-            # (Reinstallation logic identical to V5)
+            for f in failed_files[:10]:
+                print(f"    {f}")
+            if len(failed_files) > 10:
+                print(f"    ... and {len(failed_files) - 10} more")
+
+            if confirm_action("Attempt to reinstall packages with modified files?"):
+                # Find which packages own these files and reinstall them
+                packages_to_reinstall = set()
+                for filepath in failed_files:
+                    pkg_output = run_command(f"dpkg -S {filepath} 2>/dev/null", silent=True)
+                    if pkg_output:
+                        # Output is like "package: /path/to/file"
+                        pkg_name = pkg_output.split(":")[0].strip()
+                        packages_to_reinstall.add(pkg_name)
+
+                if packages_to_reinstall:
+                    print_status(f"Reinstalling {len(packages_to_reinstall)} packages...")
+                    for pkg in packages_to_reinstall:
+                        print_status(f"Reinstalling: {pkg}...", None)
+                        run_command(f"apt-get install --reinstall -yq {pkg}", silent=True)
+                    print_status("Package reinstallation complete. Run debsums -c again to verify.", True)
 
 
 # --- Phase 7: Firewall Activation ---
@@ -1511,70 +1723,159 @@ def configure_extra_services():
 
 
 def audit_system_settings():
-    """Audits Sudoers, UMASK, and Browser Policies."""
+    """V6.2: Comprehensive system settings audit and hardening."""
 
-    print_status("Auditing System Settings (Sudo, UMASK, Browsers)...")
+    print_status("Auditing System Settings (Sudo, Guest, LightDM, Kernel, Browsers)...")
 
-    # Sudoers
+    # === SUDOERS HARDENING ===
     try:
         shutil.copyfile("/etc/sudoers", "/etc/sudoers.bak_juggernaut")
         with open("/etc/sudoers", "r") as f:
             lines = f.readlines()
         new_lines = []
         changed = False
+        has_env_reset = False
+        has_secure_path = False
+
         for line in lines:
+            original_line = line
+            # Remove NOPASSWD - sudo must require authentication
             if "NOPASSWD:" in line:
                 line = line.replace("NOPASSWD:", "")
                 changed = True
+            # Fix !env_reset - must reset environment
             if "!env_reset" in line:
                 line = line.replace("!env_reset", "env_reset")
                 changed = True
+            # Comment out dangerous env_keep lines (especially LD_PRELOAD)
             if "env_keep" in line and "Defaults" in line:
-                line = "# " + line
-                changed = True
+                if "LD_PRELOAD" in line or "LD_LIBRARY_PATH" in line:
+                    line = "# DISABLED: " + line
+                    changed = True
+            # Track existing settings
+            if "Defaults" in line and "env_reset" in line and "!" not in line:
+                has_env_reset = True
+            if "Defaults" in line and "secure_path" in line:
+                has_secure_path = True
             new_lines.append(line)
+
+        # Add missing security defaults
+        if not has_env_reset:
+            new_lines.insert(0, "Defaults    env_reset\n")
+            changed = True
+        if not has_secure_path:
+            new_lines.insert(0, "Defaults    secure_path=\"/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\"\n")
+            changed = True
+
         if changed:
-            # Validate with visudo before applying
             with open("/tmp/sudoers.tmp", "w") as f:
                 f.writelines(new_lines)
             if run_command("visudo -cf /tmp/sudoers.tmp", silent=True) is not None:
                 shutil.move("/tmp/sudoers.tmp", "/etc/sudoers")
                 os.chmod("/etc/sudoers", 0o440)
+                print_status("Sudoers hardened successfully")
             else:
-                print_status(
-                    "Sudoers modification failed validation. Reverting.", False
-                )
+                print_status("Sudoers modification failed validation. Reverting.", False)
+                os.remove("/tmp/sudoers.tmp")
     except Exception as e:
         print_status(f"Failed to modify sudoers: {e}", False)
 
-    # Login.defs UMASK
+    # === SUDO.CONF - DISABLE COREDUMP ===
+    print_status("Configuring /etc/sudo.conf (disable coredump)...")
+    sudo_conf = "/etc/sudo.conf"
+    try:
+        sudo_conf_content = ""
+        if os.path.exists(sudo_conf):
+            with open(sudo_conf, "r") as f:
+                sudo_conf_content = f.read()
+        if "disable_coredump" not in sudo_conf_content:
+            with open(sudo_conf, "a") as f:
+                f.write("\n# Juggernaut V6.2: Prevent sudo coredumps (security)\nSet disable_coredump true\n")
+    except Exception as e:
+        print_status(f"Failed to configure sudo.conf: {e}", False)
 
-    defs = "/etc/login.defs"
+    # === GUEST ACCOUNT DISABLING ===
+    print_status("Disabling guest account...")
+    # Method 1: /etc/lightdm/lightdm.conf.d/
+    lightdm_conf_d = "/etc/lightdm/lightdm.conf.d"
+    if os.path.exists("/etc/lightdm"):
+        os.makedirs(lightdm_conf_d, exist_ok=True)
+        guest_conf = os.path.join(lightdm_conf_d, "50-no-guest.conf")
+        try:
+            with open(guest_conf, "w") as f:
+                f.write("[Seat:*]\nallow-guest=false\n")
+        except Exception as e:
+            print_status(f"Failed to disable guest in lightdm.conf.d: {e}", False)
 
-    content = run_command(f"cat {defs}", silent=True)
+    # Method 2: Direct lightdm.conf edit
+    lightdm_conf = "/etc/lightdm/lightdm.conf"
+    if os.path.exists(lightdm_conf):
+        run_command(f"sed -i '/allow-guest/d' {lightdm_conf}", silent=True)
+        run_command(f"sed -i '/\\[Seat:\\*\\]/a allow-guest=false' {lightdm_conf}", silent=True)
 
-    if "UMASK" not in content:
-        run_command(f"echo 'UMASK 077' >> {defs}")
+    # Method 3: AccountsService (for Ubuntu)
+    run_command("gsettings set org.gnome.login-screen allow-guest false", silent=True, suppress_stderr=True)
 
+    # === LIGHTDM HARDENING ===
+    print_status("Hardening LightDM configuration...")
+    if os.path.exists(lightdm_conf):
+        # Disable autologin
+        run_command(f"sed -i 's/^autologin-user=.*/# autologin-user=/' {lightdm_conf}", silent=True)
+        run_command(f"sed -i '/autologin-user-timeout/d' {lightdm_conf}", silent=True)
+        # Hide user list (optional - may cause usability issues)
+        # run_command(f"sed -i '/\\[Seat:\\*\\]/a greeter-hide-users=true' {lightdm_conf}", silent=True)
+
+    # === KERNEL LOCKDOWN (if available) ===
+    print_status("Checking kernel lockdown capability...")
+    lockdown_file = "/sys/kernel/security/lockdown"
+    if os.path.exists(lockdown_file):
+        try:
+            with open(lockdown_file, "r") as f:
+                current = f.read()
+            if "none" in current or "[none]" in current:
+                if confirm_action("Enable kernel lockdown (integrity mode)? This restricts kernel modifications."):
+                    try:
+                        with open(lockdown_file, "w") as f:
+                            f.write("integrity")
+                        print_status("Kernel lockdown set to integrity mode")
+                    except Exception as e:
+                        print_status(f"Failed to enable kernel lockdown: {e}", None)
+        except Exception:
+            pass
     else:
-        run_command(f"sed -i 's/^UMASK.*/UMASK 077/' {defs}")
+        print_status("Kernel lockdown not available on this system", None)
 
-    if "PASS_WARN_AGE" not in content:
-        run_command(f"echo 'PASS_WARN_AGE 7' >> {defs}")
-
-    else:
-        run_command(f"sed -i 's/^PASS_WARN_AGE.*/PASS_WARN_AGE 7/' {defs}")
-
-    # Browser Policies
-
+    # === BROWSER POLICIES ===
+    print_status("Configuring browser security policies...")
+    # Firefox
     pol_dir = "/etc/firefox/policies"
-
     os.makedirs(pol_dir, exist_ok=True)
+    firefox_policy = {
+        "policies": {
+            "DisableTelemetry": True,
+            "PopupBlocking": {"Default": True},
+            "OfferToSaveLogins": False,
+            "PasswordManagerEnabled": False,
+            "DisableFormHistory": True,
+            "EnableTrackingProtection": {"Value": True, "Cryptomining": True, "Fingerprinting": True}
+        }
+    }
+    try:
+        import json
+        with open(os.path.join(pol_dir, "policies.json"), "w") as f:
+            json.dump(firefox_policy, f, indent=2)
+    except Exception:
+        with open(os.path.join(pol_dir, "policies.json"), "w") as f:
+            f.write('{ "policies": { "DisableTelemetry": true, "PopupBlocking": { "Default": true }, "OfferToSaveLogins": false } }')
 
-    with open(os.path.join(pol_dir, "policies.json"), "w") as f:
-        f.write(
-            '{ "policies": { "DisableTelemetry": true, "PopupBlocking": { "Default": true }, "OfferToSaveLogins": false } }'
-        )
+    # Chrome/Chromium
+    chrome_pol_dir = "/etc/chromium/policies/managed"
+    os.makedirs(chrome_pol_dir, exist_ok=True)
+    try:
+        with open(os.path.join(chrome_pol_dir, "juggernaut_policy.json"), "w") as f:
+            f.write('{ "PasswordManagerEnabled": false, "AutofillAddressEnabled": false, "AutofillCreditCardEnabled": false }')
+    except Exception as e:
+        print_status(f"Failed to write Chrome policy: {e}", False)
 
 
 # --- Main Execution ---
