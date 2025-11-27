@@ -56,59 +56,166 @@ REQUIRED_SERVICES_RAW = []
 REQUIRED_INSTALLS = []
 PROHIBITED_SOFTWARE = []
 
-# Constants (Use the comprehensive list provided in previous interactions for DEFAULT_PROHIBITED)
+# V6.3: Comprehensive prohibited software list
 DEFAULT_PROHIBITED = [
-    "hydra",
-    "john",
-    "nmap",
-    "netcat",
-    "nc",
-    "wireshark",
-    "aircrack-ng",
-    "ophcrack",
+    # === Password Cracking / Brute Force ===
+    "hydra", "hydra-gtk",
+    "john", "john-data",
+    "hashcat", "hashcat-data",
+    "ophcrack", "ophcrack-cli",
+    "medusa",
+    "ncrack",
+    "crowbar",
+    "patator",
+    "thc-hydra",
+    "fcrackzip",
+    "pdfcrack",
+    "rarcrack",
+    "crunch",
+    "cewl",
+    # === Network Scanning / Enumeration ===
+    "nmap", "zenmap",
+    "masscan",
+    "unicornscan",
+    "netdiscover",
+    "arp-scan",
+    "p0f",
+    "hping3",
+    "fping",
+    "xprobe", "xprobe2",  # V6.3: Added
+    "doona",              # V6.3: Added (BED fork)
+    "bed",                # V6.3: Bruteforce Exploit Detector
+    # === Vulnerability Scanners ===
     "nikto",
     "sqlmap",
-    "kismet",
-    "medusa",
+    "wpscan",
+    "wapiti",
+    "skipfish",
+    "w3af",
+    "arachni",
+    "vega",
+    "openvas",
+    "lynis",              # Could be legit but often flagged
+    # === Network Sniffing / MITM ===
+    "wireshark", "wireshark-common", "wireshark-qt",
+    "tshark",
+    "tcpdump",
+    "ettercap", "ettercap-common", "ettercap-graphical", "ettercap-text-only",
     "dsniff",
-    "ettercap",
-    "hashcat",
+    "arpspoof",
+    "dnsspoof",
+    "macchanger",
+    "mitmproxy",
+    "bettercap",
+    "responder",
+    # === Exploitation Frameworks ===
     "metasploit-framework",
-    "telnetd",
-    "rsh-server",
-    "tftpd",
+    "exploitdb", "exploit-database",
+    "beef-xss",
+    "set",                # Social Engineering Toolkit
+    "armitage",
+    # === Wireless Hacking ===
+    "aircrack-ng",
+    "kismet",
+    "reaver",
+    "wifite",
+    "fern-wifi-cracker",
+    "cowpatty",
+    "pixiewps",
+    "bully",
+    # === Netcat / Reverse Shells ===
+    "netcat", "nc",
+    "netcat-traditional", "netcat-openbsd",
+    "ncat",
+    "socat",
+    "cryptcat",
+    # === Remote Access / RATs ===
+    "backdoor-factory",
+    "weevely",
+    "pyrdp",              # V6.3: Added
+    # === Forensics / Recovery (can be misused) ===
+    "foremost",
+    "scalpel",
+    "autopsy",
+    "sleuthkit",
+    # === Other Hacking Tools ===
+    "yersinia",
+    "impacket-scripts",
+    "fierce",
+    "theharvester",
+    "recon-ng",
+    "maltego",
+    "spiderfoot",
+    # === Insecure Services ===
+    "telnetd", "telnet", "inetutils-telnetd",
+    "rsh-server", "rsh-client",
+    "tftpd", "tftpd-hpa", "tftp",
     "finger",
-    "talkd",
+    "talk", "talkd",
+    "nis", "ypbind",
+    "inetd", "openbsd-inetd", "xinetd",
+    "rpcbind",
+    # === Remote Desktop / VNC ===
+    "vino",
+    "tightvncserver", "vnc4server", "x11vnc",
+    "xrdp",
+    "remmina", "rdesktop", "vinagre",
+    # === Games ===
     "aisleriot",
-    "gnome-mines",
+    "gnome-mines", "kmines",
     "gnome-sudoku",
-    "freeciv",
+    "gnome-mahjongg",
+    "gnome-chess",
+    "kpat",
+    "freeciv", "freeciv-client-gtk", "freeciv-server",
     "openarena",
-    "minetest",
-    "transmission",
+    "minetest", "minetest-server",
+    "doomsday",
+    "wesnoth",
+    "supertuxkart", "supertux",
+    "steam", "steam-launcher",
+    "lutris",
+    "iagno", "swell-foop", "quadrapassel", "chromium-bsu",
+    "0ad",
+    "games-arcade", "games-board", "games-card",
+    # === P2P / Torrents ===
+    "transmission", "transmission-gtk", "transmission-daemon", "transmission-cli",
+    "deluge", "deluge-gtk",
+    "qbittorrent",
     "vuze",
     "frostwire",
-    "amule",
+    "amule", "amule-daemon",
+    "ktorrent",
+    "rtorrent",
+    # === IRC / Chat ===
     "irssi",
     "hexchat",
-    # Aggressive Service Purge
-    "apache2",
-    "nginx",
+    "weechat",
+    "pidgin",
+    "xchat",
+    # === Media Players (sometimes prohibited) ===
+    "vlc",
+    # === Servers (disable if not required) ===
+    "apache2", "apache2-utils",
+    "nginx", "nginx-common",
     "lighttpd",
     "vsftpd",
-    "proftpd",
+    "proftpd", "proftpd-basic",
     "pure-ftpd",
-    "mysql-server",
-    "mariadb-server",
-    "postgresql",
-    "mongodb",
+    "mysql-server", "mysql-client",
+    "mariadb-server", "mariadb-client",
+    "postgresql", "postgresql-client",
+    "mongodb", "mongodb-server",
     "bind9",
     "squid",
-    "snmpd",
-    "nfs-kernel-server",
+    "snmp", "snmpd",
+    "nfs-kernel-server", "nfs-common",
     "postfix",
     "sendmail",
     "exim4",
+    "dovecot-core", "dovecot-imapd", "dovecot-pop3d",
+    "isc-dhcp-server",
+    "samba", "samba-common",
 ]
 
 SERVICE_MAP = {
@@ -131,7 +238,7 @@ SERVICE_PORTS = {
     "smbd": [139, 445],
 }
 
-# V6: EXPANDED Essential services whitelist (Prevents GUI/System breakage)
+# V6.3: EXPANDED Essential services whitelist (Prevents GUI/System breakage)
 ESSENTIAL_SERVICES = [
     # Core System/Hardware
     "dbus",
@@ -145,16 +252,25 @@ ESSENTIAL_SERVICES = [
     "irqbalance",
     "thermald",
     "power-profiles-daemon",
-    # Networking
+    # Networking (V6.3: Added networking.service, ifupdown)
     "NetworkManager",
     "wpa_supplicant",
     "avahi-daemon",
     "bluetooth",
-    "networkd-dispatcher",  # V6.2: Network event handler
-    # Filesystem/Mounting (CRITICAL FIX: Includes udisks2)
+    "networkd-dispatcher",
+    "networking",         # V6.3: Core networking service
+    "ifupdown-pre",       # V6.3: Network interface pre-config
+    # Filesystem/Mounting (V6.3: Added LVM, ZFS)
     "udisks2",
     "bolt",
-    # GUI/Display Managers (CRITICAL FIX: Includes plymouth)
+    "lvm2-monitor",       # V6.3: LVM volume monitoring
+    "blk-availability",   # V6.3: Block device availability
+    "zfs-load-module",    # V6.3: ZFS module loading
+    "zfs-mount",          # V6.3: ZFS mounting
+    "zfs-share",          # V6.3: ZFS sharing
+    "zfs-volume-wait",    # V6.3: ZFS volume wait
+    "zfs-zed",            # V6.3: ZFS event daemon
+    # GUI/Display Managers
     "gdm",
     "gdm3",
     "lightdm",
@@ -165,20 +281,22 @@ ESSENTIAL_SERVICES = [
     "rtkit-daemon",
     "geoclue",
     "switcheroo-control",
-    # User Session Management (V6.2 CRITICAL FIX: user-runtime-dir@ for session stability)
+    # User Session Management
     "user@",
-    "user-runtime-dir@",  # V6.2 FIX: CRITICAL - manages /run/user/UID, killing breaks session
-    "session-",           # V6.2: Session scopes
+    "user-runtime-dir@",
+    "session-",
     "getty@",
     "accounts-daemon",
-    # Utilities/Logging
+    # Utilities/Logging (V6.3: Added lm-sensors, finalrd)
     "cron",
     "anacron",
     "rsyslog",
     "auditd",
     "apparmor",
-    "apport",             # V6.2: Crash reporting (safe to keep)
-    "fwupd",              # V6.2: Firmware updates (safe to keep)
+    "apport",
+    "fwupd",
+    "lm-sensors",         # V6.3: Hardware monitoring
+    "finalrd",            # V6.3: Final RAM disk cleanup
     # Software Management
     "snapd",
     "packagekit",
@@ -190,7 +308,7 @@ ESSENTIAL_SERVICES = [
     "cups-browsed",
     "whoopsie",
     "kerneloops",
-    # Hardware Setup (Critical for boot)
+    # Hardware Setup
     "console-setup",
     "keyboard-setup",
     "setvtrgb",
@@ -202,6 +320,9 @@ ESSENTIAL_SERVICES = [
     "vmtoolsd",
     "vgauth",
     "spice-vdagent",
+    # Distro-specific (V6.3: Ubuntu/Mint adjustments)
+    "ubuntu-system-adjustments",
+    "mintupdate",
     # CP Specific
     "ccsclient",
     "ufw",
@@ -505,10 +626,12 @@ def forensics_collection():
 
 # --- Phase 1.8: System Updates
 def ensure_automatic_updates():
-    """Force enable unattended-upgrades for points."""
+    """V6.3: Force enable automatic updates for Ubuntu AND Linux Mint."""
     print_status(
-        "Ensuring Automatic Updates (unattended-upgrades) are configured and running..."
+        "Ensuring Automatic Updates are configured and running..."
     )
+
+    # Standard Ubuntu unattended-upgrades
     run_command("apt-get install unattended-upgrades apt-listchanges -yq", silent=True)
 
     config_content = """
@@ -523,6 +646,43 @@ APT::Periodic::AutocleanInterval "7";
         print_status(f"Failed to write apt config: {e}", False)
     run_command("systemctl unmask unattended-upgrades", silent=True)
     run_command("systemctl enable --now unattended-upgrades", silent=True)
+
+    # V6.3: Linux Mint Update Manager configuration
+    if OS_DISTRO == "linuxmint":
+        print_status("Configuring Linux Mint Update Manager for automatic updates...")
+
+        # Mint stores update preferences in dconf
+        # Enable automatic updates via mintupdate preferences
+        mint_autorefresh_conf = "/etc/linuxmint/mintupdate-automation.conf"
+        try:
+            os.makedirs("/etc/linuxmint", exist_ok=True)
+            with open(mint_autorefresh_conf, "w") as f:
+                f.write("# Juggernaut V6.3: Enable automatic updates\n")
+                f.write("AUTOMATIONENABLED=True\n")
+                f.write("AUTOREFRESHENABLED=True\n")
+        except IOError as e:
+            print_status(f"Failed to write Mint automation config: {e}", False)
+
+        # Enable the mintupdate automation timer if it exists
+        run_command("systemctl enable --now mintupdate-automation.timer", silent=True, suppress_stderr=True)
+
+        # Try to set dconf/gsettings for mintupdate (for the GUI)
+        # Note: This may require running as the actual user, not just root
+        for user_entry in pwd.getpwall():
+            if user_entry.pw_uid >= 1000 and user_entry.pw_uid < 65000:
+                username = user_entry.pw_name
+                home = user_entry.pw_dir
+                dconf_dir = os.path.join(home, ".config", "dconf")
+                if os.path.exists(dconf_dir):
+                    # Use sudo -u to run as the user
+                    run_command(
+                        f"sudo -u {username} dbus-launch gsettings set com.linuxmint.updates autorefresh-hours 2",
+                        silent=True, suppress_stderr=True
+                    )
+                    run_command(
+                        f"sudo -u {username} dbus-launch gsettings set com.linuxmint.updates auto-update-cinnamon-spices true",
+                        silent=True, suppress_stderr=True
+                    )
 
 
 def system_updates():
@@ -594,30 +754,30 @@ def interactive_media_hunt(stdscr):
         GREEN = curses.A_NORMAL
         RED = curses.A_BOLD
 
+    # V6.3: Comprehensive media/file extensions
     extensions = [
-        "*.mp3",
-        "*.mp4",
-        "*.avi",
-        "*.mkv",
-        "*.mov",
-        "*.wav",
-        "*.flac",
-        "*.sh",
-        "*.py",
-        "*.pl",
-        "*.rb",
-        "*.php",
-        "*.cgi",
-        "*.jpg",
-        "*.jpeg",
-        "*.png",
-        "*.gif",
+        # Audio formats
+        "*.mp3", "*.ogg", "*.wav", "*.flac", "*.aac", "*.wma", "*.m4a", "*.opus",
+        "*.aiff", "*.mid", "*.midi",
+        # Video formats
+        "*.mp4", "*.avi", "*.mkv", "*.mov", "*.wmv", "*.flv", "*.webm", "*.m4v",
+        "*.mpeg", "*.mpg", "*.3gp", "*.vob",
+        # Image formats (careful - some may be legitimate)
+        "*.jpg", "*.jpeg", "*.png", "*.gif", "*.bmp", "*.tiff", "*.webp",
+        # Torrent files
+        "*.torrent",
+        # Scripts in user areas (potential backdoors)
+        "*.sh", "*.py", "*.pl", "*.rb", "*.php", "*.cgi",
     ]
 
+    # V6.3: Extended search paths including common malware hiding spots
     search_command = (
-        f"find /home /var/www /srv /tmp /opt -type f "
-        f"\( -iname {' -o -iname '.join(extensions)} \) "
+        f"find /home /var/www /srv /tmp /opt /usr/games /usr/share -type f "
+        f"\\( -iname {' -o -iname '.join(extensions)} \\) "
         f"-not -path '*/.cache/*' -not -path '*/snap/*' -not -path '*/.config/*' "
+        f"-not -path '*/icons/*' -not -path '*/pixmaps/*' -not -path '*/backgrounds/*' "
+        f"-not -path '*/sounds/*' -not -path '*/help/*' -not -path '*/doc/*' "
+        f"-not -path '*/man/*' -not -path '*/locale/*' "
         f"2>/dev/null"
     )
 
@@ -839,6 +999,16 @@ def user_management_blitz():
     # Handle root password
     if CURRENT_OPERATOR != "root":
         change_password("root", NEW_PASSWORD)
+
+    # V6.3: Apply password aging to ALL existing users (not just new ones)
+    print_status("Applying password aging policies to existing users...")
+    for username in AUTHORIZED_USERS:
+        try:
+            pwd.getpwnam(username)
+            # Set max password age (90 days), min age (7 days), warn (7 days)
+            run_command(f"chage -M 90 -m 7 -W 7 {username}", silent=True)
+        except KeyError:
+            pass
 
     # Advanced Checks (UID 0, Shells, Lock Root)
     uid_counter = 1500
@@ -1292,7 +1462,7 @@ def software_services_and_hardening():
 
 
 def network_audit_active_kill():
-    """V6: Analyzes listening ports (ss) to detect backdoors AND KILLS THEM."""
+    """V6.3: Analyzes listening ports to detect backdoors, KILLS them, and DELETES source files."""
     print_status("Analyzing listening network ports (Active Backdoor Killer)...")
 
     listeners = run_command("ss -tulpn")
@@ -1304,15 +1474,11 @@ def network_audit_active_kill():
 
     # Define highly suspicious process names
     bad_procs = [
-        "nc",
-        "netcat",
-        "ncat",
-        "nc.traditional",
-        "bash",
-        "sh",
-        "python",
-        "perl",
-        "php",
+        "nc", "netcat", "ncat", "nc.traditional",
+        "bash", "sh", "dash", "zsh",
+        "python", "python2", "python3",
+        "perl", "php", "ruby", "lua",
+        "socat", "cryptcat",
     ]
 
     for line in listeners.split("\n"):
@@ -1328,8 +1494,9 @@ def network_audit_active_kill():
                         # Whitelist known safe uses
                         if proc_name == "sh" and "sshd" in line:
                             continue
-                        if proc_name == "python" and (
-                            "unattended-upgr" in line or "apt" in line
+                        if proc_name.startswith("python") and (
+                            "unattended-upgr" in line or "apt" in line or
+                            "mintupdate" in line or "update-manager" in line
                         ):
                             continue
                         is_malicious = True
@@ -1341,29 +1508,70 @@ def network_audit_active_kill():
                         False,
                     )
 
+                    # V6.3: Get ALL information BEFORE killing
+                    exe_path = ""
+                    script_path = ""
+                    cwd = ""
+
+                    try:
+                        # Get the executable (e.g., /usr/bin/python3)
+                        exe_path = os.readlink(f"/proc/{pid}/exe")
+                    except Exception:
+                        pass
+
+                    try:
+                        # Get the command line - THIS is where we find the actual script!
+                        with open(f"/proc/{pid}/cmdline", "r") as f:
+                            cmdline = f.read().replace("\x00", " ").strip()
+                            # Parse cmdline to find script files
+                            # e.g., "python3 /usr/share/zod/kneelB4zod.py"
+                            parts = cmdline.split()
+                            for part in parts:
+                                if part.endswith((".py", ".sh", ".pl", ".rb", ".php")):
+                                    if os.path.isabs(part):
+                                        script_path = part
+                                    else:
+                                        # Try to resolve relative path
+                                        try:
+                                            cwd = os.readlink(f"/proc/{pid}/cwd")
+                                            potential_path = os.path.join(cwd, part)
+                                            if os.path.exists(potential_path):
+                                                script_path = potential_path
+                                        except Exception:
+                                            pass
+                                    break
+                    except Exception:
+                        pass
+
+                    # Get working directory
+                    try:
+                        cwd = os.readlink(f"/proc/{pid}/cwd")
+                    except Exception:
+                        pass
+
+                    # Log what we found
+                    logging.warning(f"BACKDOOR FOUND: PID={pid}, exe={exe_path}, script={script_path}, cwd={cwd}")
+
                     # ACTIVE KILL
                     try:
-                        exe_path = ""
-                        try:
-                            # Try to read the executable path before killing
-                            exe_path = os.readlink(f"/proc/{pid}/exe")
-                        except Exception:
-                            pass
-
-                        # Kill the process
                         os.kill(pid, signal.SIGKILL)
                         print_status(f"KILLED PID {pid}", True)
-                        logging.warning(
-                            f"KILLED BACKDOOR PROCESS: PID {pid} ({proc_name})"
-                        )
+                        logging.warning(f"KILLED BACKDOOR PROCESS: PID {pid} ({proc_name})")
 
-                        # Prompt to delete the executable
-                        if exe_path and os.path.exists(exe_path):
-                            if confirm_action(
-                                f"Delete the associated executable? {exe_path}"
-                            ):
-                                os.remove(exe_path)
-                                print_status(f"Deleted {exe_path}", True)
+                        # V6.3: Delete the SCRIPT file (not the interpreter!)
+                        if script_path and os.path.exists(script_path):
+                            # Don't delete system binaries!
+                            if not script_path.startswith(("/usr/bin", "/bin", "/sbin")):
+                                print_status(f"Found backdoor script: {script_path}", False)
+                                if confirm_action(f"Delete backdoor script? {script_path}"):
+                                    os.remove(script_path)
+                                    print_status(f"Deleted {script_path}", True)
+                                    # Also try to remove the parent directory if it looks malicious
+                                    parent_dir = os.path.dirname(script_path)
+                                    if parent_dir and not parent_dir.startswith(("/home", "/root", "/tmp", "/var")):
+                                        if confirm_action(f"Also remove directory? {parent_dir}"):
+                                            shutil.rmtree(parent_dir, ignore_errors=True)
+                                            print_status(f"Removed directory {parent_dir}", True)
 
                     except ProcessLookupError:
                         print_status(f"Process {pid} already gone.", None)
@@ -1531,18 +1739,94 @@ def audit_ssh_keys_and_profiles():
                                 break
 
 
+def scan_malicious_archives():
+    """V6.3: Scan for malicious archives/zip files in suspicious locations."""
+    print_status("Scanning for malicious archives in system directories...")
+
+    # Suspicious locations where archives shouldn't normally exist
+    suspicious_paths = [
+        "/usr/games",
+        "/usr/share",
+        "/usr/local/share",
+        "/opt",
+        "/var/games",
+        "/var/tmp",
+        "/tmp",
+    ]
+
+    # Archive extensions to look for
+    archive_extensions = [
+        "*.zip", "*.tar", "*.tar.gz", "*.tgz", "*.tar.bz2", "*.tbz2",
+        "*.tar.xz", "*.txz", "*.rar", "*.7z", "*.cab", "*.iso",
+    ]
+
+    # Known malicious archive names (add more as discovered)
+    malicious_names = [
+        "pyrdp", "exploit", "backdoor", "hack", "crack", "keygen",
+        "payload", "shell", "reverse", "rat", "trojan", "malware",
+        "rootkit", "botnet", "meterpreter", "mimikatz",
+    ]
+
+    found_archives = []
+
+    for search_path in suspicious_paths:
+        if os.path.exists(search_path):
+            for ext in archive_extensions:
+                find_cmd = f"find {search_path} -maxdepth 3 -type f -iname '{ext}' 2>/dev/null"
+                result = run_command(find_cmd, silent=True)
+                if result:
+                    for filepath in result.split("\n"):
+                        if filepath.strip():
+                            found_archives.append(filepath.strip())
+
+    if found_archives:
+        print_status(f"Found {len(found_archives)} archive files in suspicious locations:", None)
+
+        for archive in found_archives:
+            filename = os.path.basename(archive).lower()
+
+            # Check if filename contains known malicious names
+            is_suspicious = False
+            for mal_name in malicious_names:
+                if mal_name in filename:
+                    is_suspicious = True
+                    break
+
+            # Also flag archives in very unusual locations
+            if "/usr/games" in archive or "/usr/share" in archive:
+                # Most archives in these locations are suspicious
+                if not any(safe in archive for safe in ["/icons", "/doc", "/help", "/locale"]):
+                    is_suspicious = True
+
+            if is_suspicious:
+                print_status(f"SUSPICIOUS ARCHIVE: {archive}", False)
+                if confirm_action(f"Delete this archive? {archive}"):
+                    try:
+                        os.remove(archive)
+                        print_status(f"Deleted {archive}", True)
+                        logging.warning(f"DELETED SUSPICIOUS ARCHIVE: {archive}")
+                    except Exception as e:
+                        print_status(f"Failed to delete: {e}", False)
+            else:
+                print(f"    [?] {archive}")
+
+    else:
+        print_status("No suspicious archives found.")
+
+
 def integrity_and_advanced_detection():
-    """V6.2: Checks binaries and hunts for persistence with Active Kill."""
+    """V6.3: Checks binaries and hunts for persistence with Active Kill."""
     print_header("Phase 6: Advanced Detection and Integrity (Active Mode)")
 
     if not confirm_action("Begin Advanced Detection? (Includes Active Kill/Removal)"):
         return
 
-    # V6.2: All Active Audits
+    # V6.3: All Active Audits
     network_audit_active_kill()
     suid_sgid_audit()
     audit_ssh_keys_and_profiles()
     persistence_hunt_active_removal()
+    scan_malicious_archives()  # V6.3: Scan for malicious zip/tar files
 
     # Integrity Check (Debsums)
     print_status("Checking for poisoned binaries (debsums -c)...")
