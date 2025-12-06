@@ -1,0 +1,18 @@
+# Authorized Administrators
+chowe
+miles
+gwen
+peter
+# Authorized Users
+peni
+noir
+ham
+stan
+steve
+miguel
+jefferson
+rio
+may
+jessica
+pavitr
+maryjane
