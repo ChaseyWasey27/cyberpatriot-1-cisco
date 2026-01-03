@@ -1,0 +1,11 @@
+nginx
+mysql-server
+php8.3-fpm
+php-mysql
+php-xml
+php-gd
+php-mbstring
+php-zip
+php-curl
+unattended-upgrades
+ufw

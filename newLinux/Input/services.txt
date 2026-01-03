@@ -1,0 +1,3 @@
+nginx
+mysql
+php8.3-fpm
